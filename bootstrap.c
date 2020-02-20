@@ -21,13 +21,6 @@ typedef struct sObj {
   } data;
 } Obj;
 
-Obj *THENULL;
-
-int isnull(Obj *o)
-{
-  return o == THENULL;
-}
-
 Obj *allocobj()
 {
   Obj *o = malloc(sizeof(Obj));
@@ -48,6 +41,45 @@ Obj *makesymbol(char *buffer, int len) {
   symbol->data.symbol.name = malloc(len+1);
   strncpy(symbol->data.symbol.name, buffer, len+1);
   return symbol;
+}
+
+Obj *car(Obj *pair)
+{
+  return pair->data.pair.car;
+}
+
+Obj *cdr(Obj *pair)
+{
+  return pair->data.pair.cdr;
+}
+
+Obj *cons(Obj *car, Obj *cdr)
+{
+  Obj *pair = allocobj();
+  pair->type = PAIR;
+  pair->data.pair.car = car;
+  pair->data.pair.cdr = cdr;
+  return pair;
+}
+
+#define MAKE_CONSTANT_SYMBOL(str) makesymbol(str, sizeof(str))
+
+#define DECLARE_CONSTANT(name) \
+  Obj *the##name;\
+  int is##name(Obj *o)\
+  {\
+  return o == the##name;\
+  }
+
+DECLARE_CONSTANT(null)
+DECLARE_CONSTANT(quote)
+
+void initconstants()
+{
+  thenull = allocobj();
+  thenull->type = _NULL;
+
+  thequote = MAKE_CONSTANT_SYMBOL("quote");
 }
 
 int peek()
@@ -76,7 +108,7 @@ Obj *readpair()
   skipwhitespace();
   if (peek() == ')') {
     getchar();
-    return THENULL;
+    return thenull;
   }
 
   Obj *pair = allocobj();
@@ -105,14 +137,18 @@ Obj *read()
 
   if (scanf("%d", &i)) /* skips whitespace */
     return makefixnum(i);
-  else if (peek() == '(') {
-    getchar();
+
+  int c = getchar();
+  switch (c) {
+  case '(':
     return readpair();
-  } else if (peek() == ')') {
+  case ')':
     fprintf(stderr, "unbalanced parenthesis\n");
     exit(1);
-  } else {
-    int c;
+  case '\'':
+    return cons(thequote, read());
+  default:
+    ungetc(c, stdin);
     for (i = 0; !isdelimiter(c = getchar()); readbuffer[i++] = c);
     ungetc(c, stdin);
     readbuffer[i] = '\0';
@@ -123,19 +159,33 @@ Obj *read()
   exit(1);
 }
 
+Obj *eval(Obj *o)
+{
+  switch (o->type) {
+  case INT:
+    return o;
+  case PAIR:
+    if (isquote(car(o)))
+      return cdr(o);
+  default:
+    fprintf(stderr, "cannot eval object\n");
+    exit(1);
+  }
+}
+
 void print(Obj *o);
 
 void printpair(Obj *o)
 {
-  print(o->data.pair.car);
+  print(car(o));
 
-  if (isnull(o->data.pair.cdr));
-  else if (o->data.pair.cdr->type == PAIR) {
+  if (isnull(cdr(o)));
+  else if (cdr(o)->type == PAIR) {
     printf(" ");
-    printpair(o->data.pair.cdr);
+    printpair(cdr(o));
   } else {
     printf(" . ");
-    print(o->data.pair.cdr);
+    print(cdr(o));
   }
 }
 
@@ -161,11 +211,10 @@ void print(Obj *o)
 
 int main()
 {
-  THENULL = allocobj();
-  THENULL->type = _NULL;
+  initconstants();
   while (1) {
     printf("> ");
-    print(read());
+    print(eval(read()));
     printf("\n");
   }
   return 0;

@@ -159,13 +159,18 @@ Obj *read()
   exit(1);
 }
 
+int isquoted(Obj *pair)
+{
+  return isquote(car(pair));
+}
+
 Obj *eval(Obj *o)
 {
   switch (o->type) {
   case INT:
     return o;
   case PAIR:
-    if (isquote(car(o)))
+    if (isquoted(o))
       return cdr(o);
   default:
     fprintf(stderr, "cannot eval object\n");
@@ -202,9 +207,14 @@ void print(Obj *o)
     printf("()");
     break;
   case PAIR:
-    printf("(");
-    printpair(o);
-    printf(")");
+    if (isquoted(o)) {
+      printf("'");
+      print(cdr(o));
+    } else {
+      printf("(");
+      printpair(o);
+      printf(")");
+    }
     break;
   }
 }

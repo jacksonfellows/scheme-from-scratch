@@ -21,6 +21,16 @@ typedef struct sObj {
   } data;
 } Obj;
 
+#define DECLARE_CONSTANT(name) \
+  Obj *the##name;\
+  int is##name(Obj *o)\
+  {\
+  return o == the##name;\
+  }
+
+DECLARE_CONSTANT(null)
+DECLARE_CONSTANT(quote)
+
 Obj *allocobj()
 {
   Obj *o = malloc(sizeof(Obj));
@@ -35,23 +45,11 @@ Obj *makefixnum(int x)
   return fixnum;
 }
 
-Obj *makesymbol(char *buffer, int len) {
-  Obj *symbol = allocobj();
-  symbol->type = SYMBOL;
-  symbol->data.symbol.name = malloc(len+1);
-  strncpy(symbol->data.symbol.name, buffer, len+1);
-  return symbol;
-}
+Obj *car(Obj *pair) {return pair->data.pair.car;}
+Obj *cdr(Obj *pair) {return pair->data.pair.cdr;}
 
-Obj *car(Obj *pair)
-{
-  return pair->data.pair.car;
-}
-
-Obj *cdr(Obj *pair)
-{
-  return pair->data.pair.cdr;
-}
+Obj *cadr(Obj *pair) {return car(cdr(pair));}
+Obj *cddr(Obj *pair) {return cdr(cdr(pair));}
 
 Obj *cons(Obj *car, Obj *cdr)
 {
@@ -62,22 +60,31 @@ Obj *cons(Obj *car, Obj *cdr)
   return pair;
 }
 
+Obj *interned;
+
+Obj *makesymbol(char *buffer, int len) {
+  for (Obj *o = interned; !isnull(o); o = cdr(o))
+    if (strncmp(car(o)->data.symbol.name, buffer, len) == 0)
+      return car(o);
+
+  Obj *symbol = allocobj();
+  symbol->type = SYMBOL;
+  symbol->data.symbol.name = malloc(len);
+  strncpy(symbol->data.symbol.name, buffer, len);
+
+  interned = cons(symbol, interned);
+
+  return symbol;
+}
+
 #define MAKE_CONSTANT_SYMBOL(str) makesymbol(str, sizeof(str))
 
-#define DECLARE_CONSTANT(name) \
-  Obj *the##name;\
-  int is##name(Obj *o)\
-  {\
-  return o == the##name;\
-  }
-
-DECLARE_CONSTANT(null)
-DECLARE_CONSTANT(quote)
-
-void initconstants()
+void init()
 {
   thenull = allocobj();
   thenull->type = _NULL;
+
+  interned = thenull;
 
   thequote = MAKE_CONSTANT_SYMBOL("quote");
 }
@@ -146,13 +153,13 @@ Obj *read()
     fprintf(stderr, "unbalanced parenthesis\n");
     exit(1);
   case '\'':
-    return cons(thequote, read());
+    return cons(thequote, cons(read(), thenull));
   default:
     ungetc(c, stdin);
     for (i = 0; !isdelimiter(c = getchar()); readbuffer[i++] = c);
     ungetc(c, stdin);
     readbuffer[i] = '\0';
-    return makesymbol(readbuffer, i);
+    return makesymbol(readbuffer, i+1);
   }
 
   fprintf(stderr, "invalid input\n");
@@ -170,8 +177,13 @@ Obj *eval(Obj *o)
   case INT:
     return o;
   case PAIR:
-    if (isquoted(o))
-      return cdr(o);
+    if (isquoted(o)) {
+      if (isnull(cdr(o)) || !isnull(cddr(o))) {
+	fprintf(stderr, "wrong # of args for quote\n");
+	exit(1);
+      }
+      return cadr(o);
+    }
   default:
     fprintf(stderr, "cannot eval object\n");
     exit(1);
@@ -209,7 +221,7 @@ void print(Obj *o)
   case PAIR:
     if (isquoted(o)) {
       printf("'");
-      print(cdr(o));
+      print(cadr(o));
     } else {
       printf("(");
       printpair(o);
@@ -221,7 +233,7 @@ void print(Obj *o)
 
 int main()
 {
-  initconstants();
+  init();
   while (1) {
     printf("> ");
     print(eval(read()));

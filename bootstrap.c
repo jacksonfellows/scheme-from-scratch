@@ -30,6 +30,8 @@ typedef struct sObj {
 
 DECLARE_CONSTANT(null)
 DECLARE_CONSTANT(quote)
+DECLARE_CONSTANT(define)
+DECLARE_CONSTANT(ok)
 
 Obj *allocobj()
 {
@@ -45,11 +47,29 @@ Obj *makefixnum(int x)
   return fixnum;
 }
 
-Obj *car(Obj *pair) {return pair->data.pair.car;}
-Obj *cdr(Obj *pair) {return pair->data.pair.cdr;}
+Obj *car(Obj *pair)
+{
+  return pair->data.pair.car;
+}
 
-Obj *cadr(Obj *pair) {return car(cdr(pair));}
-Obj *cddr(Obj *pair) {return cdr(cdr(pair));}
+Obj *cdr(Obj *pair)
+{
+  return pair->data.pair.cdr;
+}
+
+#define caar(pair) car(car(pair))
+#define cadr(pair) car(cdr(pair))
+#define cdar(pair) cdr(car(pair))
+#define cddr(pair) cdr(cdr(pair))
+
+#define caaar(pair) car(car(car(pair)))
+#define caadr(pair) car(car(cdr(pair)))
+#define cadar(pair) car(cdr(car(pair)))
+#define caddr(pair) car(cdr(cdr(pair)))
+#define cdaar(pair) cdr(car(car(pair)))
+#define cdadr(pair) cdr(car(cdr(pair)))
+#define cddar(pair) cdr(cdr(car(pair)))
+#define cdddr(pair) cdr(cdr(cdr(pair)))
 
 Obj *cons(Obj *car, Obj *cdr)
 {
@@ -59,6 +79,8 @@ Obj *cons(Obj *car, Obj *cdr)
   pair->data.pair.cdr = cdr;
   return pair;
 }
+
+#define PUSH(o, list) list = cons(o, list)
 
 Obj *interned;
 
@@ -72,12 +94,14 @@ Obj *makesymbol(char *buffer, int len) {
   symbol->data.symbol.name = malloc(len);
   strncpy(symbol->data.symbol.name, buffer, len);
 
-  interned = cons(symbol, interned);
+  PUSH(symbol, interned);
 
   return symbol;
 }
 
 #define MAKE_CONSTANT_SYMBOL(str) makesymbol(str, sizeof(str))
+
+Obj *globalenv;
 
 void init()
 {
@@ -85,8 +109,11 @@ void init()
   thenull->type = _NULL;
 
   interned = thenull;
+  globalenv = thenull;
 
   thequote = MAKE_CONSTANT_SYMBOL("quote");
+  thedefine = MAKE_CONSTANT_SYMBOL("define");
+  theok = MAKE_CONSTANT_SYMBOL("ok");
 }
 
 int peek()
@@ -166,9 +193,14 @@ Obj *read()
   exit(1);
 }
 
-int isquoted(Obj *pair)
+Obj *lookup(Obj *sym, Obj *env)
 {
-  return isquote(car(pair));
+  for (Obj *o = env; !isnull(o); o = cdr(o))
+    if (caar(o) == sym)
+      return cdar(o);
+
+  fprintf(stderr, "unbound variable\n");
+  exit(1);
 }
 
 Obj *eval(Obj *o)
@@ -176,13 +208,19 @@ Obj *eval(Obj *o)
   switch (o->type) {
   case INT:
     return o;
+  case SYMBOL:
+    return lookup(o, globalenv);
   case PAIR:
-    if (isquoted(o)) {
+    if (isquote(car(o))) {
       if (isnull(cdr(o)) || !isnull(cddr(o))) {
 	fprintf(stderr, "wrong # of args for quote\n");
 	exit(1);
       }
       return cadr(o);
+    }
+    if (isdefine(car(o))) {
+      PUSH(cons(cadr(o), caddr(o)), globalenv);
+      return theok;
     }
   default:
     fprintf(stderr, "cannot eval object\n");
@@ -219,7 +257,7 @@ void print(Obj *o)
     printf("()");
     break;
   case PAIR:
-    if (isquoted(o)) {
+    if (isquote(car(o))) {
       printf("'");
       print(cadr(o));
     } else {

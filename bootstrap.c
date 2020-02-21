@@ -223,7 +223,7 @@ Obj *eval(Obj *o)
       return cadr(o);
     }
     if (isdefine(car(o))) {
-      PUSH(cons(cadr(o), caddr(o)), globalenv);
+      PUSH(cons(cadr(o), eval(caddr(o))), globalenv);
       return theok;
     }
   default:

@@ -153,7 +153,14 @@ Obj *makeprimproc(Obj *(*proc)(Obj *args))
   return primproc;
 }
 
-Obj *plus(Obj *args)
+int length(Obj *pair)
+{
+  int len = 0;
+  for (Obj *o = pair; !isnull(o); o = cdr(o), ++len);
+  return len;
+}
+
+Obj *add(Obj *args)
 {
   int sum = 0;
   for (Obj *o = args; !isnull(o); o = cdr(o))
@@ -161,11 +168,26 @@ Obj *plus(Obj *args)
   return makefixnum(sum);
 }
 
-int length(Obj *pair)
+Obj *sub(Obj *args)
 {
-  int len = 0;
-  for (Obj *o = pair; !isnull(o); o = cdr(o), ++len);
-  return len;
+  int sum;
+  switch (length(args)) {
+  case 0: return 0;
+  case 1: return makefixnum(-car(args)->data.fixnum.val);
+  default:
+    sum = car(args)->data.fixnum.val;
+    for (Obj *o = cdr(args); !isnull(o); o = cdr(o))
+      sum -= car(o)->data.fixnum.val;
+    return makefixnum(sum);
+  }
+}
+
+Obj *mul(Obj *args)
+{
+  int product = 1;
+  for (Obj *o = args; !isnull(o); o = cdr(o))
+    product *= car(o)->data.fixnum.val;
+  return makefixnum(product);
 }
 
 #define NEED_N_ARGS(pair, name, n)					\
@@ -220,7 +242,9 @@ void init()
   MAKE_PRIM_PROC(pair?, pairp);
   MAKE_PRIM_PROC(procedure?, procedurep);
 
-  MAKE_PRIM_PROC(+, plus);
+  MAKE_PRIM_PROC(+, add);
+  MAKE_PRIM_PROC(-, sub);
+  MAKE_PRIM_PROC(*, mul);
 }
 
 int peek()

@@ -2,6 +2,9 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <string.h>
+#include <setjmp.h>
+
+jmp_buf errbuf;
 
 typedef enum { INT, SYMBOL, PAIR, _NULL } Type;
 
@@ -157,7 +160,7 @@ Obj *readpair()
     skipwhitespace();
     if (getchar() != ')') {
       fprintf(stderr, "invalid use of .\n");
-      exit(1);
+      longjmp(errbuf, 1);
     }
   } else
     pair->data.pair.cdr = readpair();
@@ -179,7 +182,7 @@ Obj *read()
     return readpair();
   case ')':
     fprintf(stderr, "unbalanced parenthesis\n");
-    exit(1);
+    longjmp(errbuf, 1);
   case '\'':
     return cons(thequote, cons(read(), thenull));
   default:
@@ -191,7 +194,7 @@ Obj *read()
   }
 
   fprintf(stderr, "invalid input\n");
-  exit(1);
+  longjmp(errbuf, 1);
 }
 
 Obj *lookup(Obj *sym, Obj *env)
@@ -201,7 +204,7 @@ Obj *lookup(Obj *sym, Obj *env)
       return cdar(o);
 
   fprintf(stderr, "unbound variable\n");
-  exit(1);
+  longjmp(errbuf, 1);
 }
 
 Obj *eval(Obj *o)
@@ -215,7 +218,7 @@ Obj *eval(Obj *o)
     if (isquote(car(o))) {
       if (isnull(cdr(o)) || !isnull(cddr(o))) {
 	fprintf(stderr, "wrong # of args for quote\n");
-	exit(1);
+	longjmp(errbuf, 1);
       }
       return cadr(o);
     }
@@ -225,7 +228,7 @@ Obj *eval(Obj *o)
     }
   default:
     fprintf(stderr, "cannot eval object\n");
-    exit(1);
+    longjmp(errbuf, 1);
   }
 }
 
@@ -274,6 +277,7 @@ int main()
 {
   init();
   while (1) {
+    setjmp(errbuf); /* should this be inside the while(1)? */
     printf("> ");
     print(eval(read()));
     printf("\n");

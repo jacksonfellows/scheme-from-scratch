@@ -24,17 +24,17 @@ typedef struct sObj {
   } data;
 } Obj;
 
-#define DECLARE_CONSTANT(name) \
-  Obj *the##name;\
-  int is##name(Obj *o)\
-  {\
-  return o == the##name;\
+#define DECLARE_CONSTANT(name)			\
+  Obj *the##name;				\
+  int is##name(Obj *o)				\
+  {						\
+    return o == the##name;			\
   }
 
-DECLARE_CONSTANT(null)
-DECLARE_CONSTANT(quote)
-DECLARE_CONSTANT(define)
-DECLARE_CONSTANT(ok)
+DECLARE_CONSTANT(null);
+DECLARE_CONSTANT(quote);
+DECLARE_CONSTANT(define);
+DECLARE_CONSTANT(ok);
 
 Obj *allocobj()
 {

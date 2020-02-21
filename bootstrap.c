@@ -35,6 +35,7 @@ DECLARE_CONSTANT(null);
 DECLARE_CONSTANT(quote);
 DECLARE_CONSTANT(define);
 DECLARE_CONSTANT(ok);
+DECLARE_CONSTANT(set);
 
 Obj *allocobj()
 {
@@ -118,6 +119,7 @@ void init()
   INIT_CONSTANT_SYMBOL(quote);
   INIT_CONSTANT_SYMBOL(define);
   INIT_CONSTANT_SYMBOL(ok);
+  theset = MAKE_CONSTANT_SYMBOL("set!");
 }
 
 int peek()
@@ -201,7 +203,7 @@ Obj *lookup(Obj *sym, Obj *env)
 {
   for (Obj *o = env; !isnull(o); o = cdr(o))
     if (caar(o) == sym)
-      return cdar(o);
+      return car(o);
 
   fprintf(stderr, "unbound variable\n");
   longjmp(errbuf, 1);
@@ -213,7 +215,7 @@ Obj *eval(Obj *o)
   case INT:
     return o;
   case SYMBOL:
-    return lookup(o, globalenv);
+    return cdr(lookup(o, globalenv));
   case PAIR:
     if (isquote(car(o))) {
       if (isnull(cdr(o)) || !isnull(cddr(o))) {
@@ -224,6 +226,11 @@ Obj *eval(Obj *o)
     }
     if (isdefine(car(o))) {
       PUSH(cons(cadr(o), eval(caddr(o))), globalenv);
+      return theok;
+    }
+    if (isset(car(o))) {
+      Obj *pair = lookup(cadr(o), globalenv);
+      pair->data.pair.cdr = eval(caddr(o));
       return theok;
     }
   default:

@@ -12,7 +12,7 @@ jmp_buf errbuf;
     longjmp(errbuf, 1);				\
   } while (0);
 
-typedef enum { NUMBER, SYMBOL, PAIR, _NULL, BOOLEAN } Type;
+typedef enum { NUMBER, SYMBOL, PAIR, _NULL, BOOLEAN, PRIM_PROC } Type;
 
 typedef struct sObj {
   Type type;
@@ -30,6 +30,9 @@ typedef struct sObj {
       struct sObj *car;
       struct sObj *cdr;
     } pair;
+    struct {
+      struct sObj *(*proc)(struct sObj *args);
+    } primproc;
   } data;
 } Obj;
 
@@ -142,6 +145,19 @@ Obj *makesymbol(char *buffer, int len) {
   return symbol;
 }
 
+Obj *makeprimproc(Obj *(*proc)(Obj *args))
+{
+  Obj *primproc = allocobj();
+  primproc->type = PRIM_PROC;
+  primproc->data.primproc.proc = proc;
+  return primproc;
+}
+
+Obj *plus(Obj *args)
+{
+  return makefixnum(car(args)->data.fixnum.val + cadr(args)->data.fixnum.val);
+}
+
 #define MAKE_CONSTANT_SYMBOL(str) makesymbol(str, sizeof(str))
 #define INIT_CONSTANT_SYMBOL(name) the##name = MAKE_CONSTANT_SYMBOL(#name)
 
@@ -163,6 +179,8 @@ void init()
   INIT_CONSTANT_SYMBOL(ok);
   theset = MAKE_CONSTANT_SYMBOL("set!");
   INIT_CONSTANT_SYMBOL(if);
+
+  PUSH(cons(MAKE_CONSTANT_SYMBOL("+"), makeprimproc(plus)), globalenv);
 }
 
 int peek()
@@ -306,6 +324,10 @@ Obj *eval(Obj *o)
       o = istruthy(eval(cadr(o))) ? caddr(o) : (isnull(cdddr(o)) ? thefalse : cadddr(o));
       goto tailcall;
     }
+    Obj *proc = eval(car(o));
+    if (proc->type != PRIM_PROC)
+      ERROR("not a procedure\n");
+    return (*(proc->data.primproc.proc))(cdr(o));
   default:
     ERROR("cannot eval object\n");
   }
@@ -351,6 +373,9 @@ void print(Obj *o)
       printpair(o);
       printf(")");
     }
+    break;
+  case PRIM_PROC:
+    printf("#<procedure>");
     break;
   }
 }

@@ -155,11 +155,15 @@ Obj *makeprimproc(Obj *(*proc)(Obj *args))
 
 Obj *plus(Obj *args)
 {
-  return makefixnum(car(args)->data.fixnum.val + cadr(args)->data.fixnum.val);
+  int sum = 0;
+  for (Obj *o = args; !isnull(o); o = cdr(o))
+    sum += car(o)->data.fixnum.val;
+  return makefixnum(sum);
 }
 
 #define MAKE_CONSTANT_SYMBOL(str) makesymbol(str, sizeof(str))
 #define INIT_CONSTANT_SYMBOL(name) the##name = MAKE_CONSTANT_SYMBOL(#name)
+#define MAKE_PRIM_PROC(name, proc) PUSH(cons(MAKE_CONSTANT_SYMBOL(#name), makeprimproc(proc)), globalenv)
 
 Obj *globalenv;
 
@@ -180,7 +184,7 @@ void init()
   theset = MAKE_CONSTANT_SYMBOL("set!");
   INIT_CONSTANT_SYMBOL(if);
 
-  PUSH(cons(MAKE_CONSTANT_SYMBOL("+"), makeprimproc(plus)), globalenv);
+  MAKE_PRIM_PROC(+, plus);
 }
 
 int peek()

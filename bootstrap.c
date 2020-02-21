@@ -209,6 +209,22 @@ Obj *lookup(Obj *sym, Obj *env)
   longjmp(errbuf, 1);
 }
 
+int length(Obj *pair)
+{
+  int len = 0;
+  for (Obj *o = pair; !isnull(o); o = cdr(o), ++len);
+  return len;
+}
+
+#define NEED_N_ARGS(pair, name, n)					\
+  do {									\
+    int len = length(cdr(pair));					\
+    if (len != n) {							\
+      fprintf(stderr, "wrong # of args for " name " (%d instead of %d)\n", len, n); \
+      longjmp(errbuf, 1);						\
+    }									\
+  } while (0);
+
 Obj *eval(Obj *o)
 {
   switch (o->type) {
@@ -218,17 +234,16 @@ Obj *eval(Obj *o)
     return cdr(lookup(o, globalenv));
   case PAIR:
     if (isquote(car(o))) {
-      if (isnull(cdr(o)) || !isnull(cddr(o))) {
-	fprintf(stderr, "wrong # of args for quote\n");
-	longjmp(errbuf, 1);
-      }
+      NEED_N_ARGS(o, "quote", 1);
       return cadr(o);
     }
     if (isdefine(car(o))) {
+      NEED_N_ARGS(o, "define", 2);
       PUSH(cons(cadr(o), eval(caddr(o))), globalenv);
       return theok;
     }
     if (isset(car(o))) {
+      NEED_N_ARGS(o, "set!", 2);
       Obj *pair = lookup(cadr(o), globalenv);
       pair->data.pair.cdr = eval(caddr(o));
       return theok;

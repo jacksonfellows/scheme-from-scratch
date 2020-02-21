@@ -100,6 +100,7 @@ Obj *makesymbol(char *buffer, int len) {
 }
 
 #define MAKE_CONSTANT_SYMBOL(str) makesymbol(str, sizeof(str))
+#define INIT_CONSTANT_SYMBOL(name) the##name = MAKE_CONSTANT_SYMBOL(#name)
 
 Obj *globalenv;
 
@@ -111,9 +112,9 @@ void init()
   interned = thenull;
   globalenv = thenull;
 
-  thequote = MAKE_CONSTANT_SYMBOL("quote");
-  thedefine = MAKE_CONSTANT_SYMBOL("define");
-  theok = MAKE_CONSTANT_SYMBOL("ok");
+  INIT_CONSTANT_SYMBOL(quote);
+  INIT_CONSTANT_SYMBOL(define);
+  INIT_CONSTANT_SYMBOL(ok);
 }
 
 int peek()

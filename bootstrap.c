@@ -6,7 +6,13 @@
 
 jmp_buf errbuf;
 
-typedef enum { INT, SYMBOL, PAIR, _NULL } Type;
+#define ERROR(fmt, ...)				\
+  do {						\
+    fprintf(stderr, fmt, ##__VA_ARGS__);	\
+    longjmp(errbuf, 1);				\
+  } while (0);
+
+typedef enum { NUMBER, SYMBOL, PAIR, _NULL, BOOLEAN } Type;
 
 typedef struct sObj {
   Type type;
@@ -14,6 +20,9 @@ typedef struct sObj {
     struct {
       int val;
     } fixnum;
+    struct {
+      int val;
+    } boolean;
     struct {
       char *name;
     } symbol;
@@ -32,10 +41,15 @@ typedef struct sObj {
   }
 
 DECLARE_CONSTANT(null);
+
+DECLARE_CONSTANT(true);
+DECLARE_CONSTANT(false);
+
 DECLARE_CONSTANT(quote);
 DECLARE_CONSTANT(define);
 DECLARE_CONSTANT(ok);
 DECLARE_CONSTANT(set);
+DECLARE_CONSTANT(if);
 
 Obj *allocobj()
 {
@@ -46,9 +60,17 @@ Obj *allocobj()
 Obj *makefixnum(int x)
 {
   Obj *fixnum = allocobj();
-  fixnum->type = INT;
+  fixnum->type = NUMBER;
   fixnum->data.fixnum.val = x;
   return fixnum;
+}
+
+Obj *makeboolean(int x)
+{
+  Obj *boolean = allocobj();
+  boolean->type = BOOLEAN;
+  boolean->data.boolean.val = x;
+  return boolean;
 }
 
 Obj *car(Obj *pair)
@@ -74,6 +96,23 @@ Obj *cdr(Obj *pair)
 #define cdadr(pair) cdr(car(cdr(pair)))
 #define cddar(pair) cdr(cdr(car(pair)))
 #define cdddr(pair) cdr(cdr(cdr(pair)))
+
+#define caaaar(pair) car(car(car(car(pair))))
+#define caaadr(pair) car(car(car(cdr(pair))))
+#define caadar(pair) car(car(cdr(car(pair))))
+#define caaddr(pair) car(car(cdr(cdr(pair))))
+#define cadaar(pair) car(cdr(car(car(pair))))
+#define cadadr(pair) car(cdr(car(cdr(pair))))
+#define caddar(pair) car(cdr(cdr(car(pair))))
+#define cadddr(pair) car(cdr(cdr(cdr(pair))))
+#define cdaaar(pair) cdr(car(car(car(pair))))
+#define cdaadr(pair) cdr(car(car(cdr(pair))))
+#define cdadar(pair) cdr(car(cdr(car(pair))))
+#define cdaddr(pair) cdr(car(cdr(cdr(pair))))
+#define cddaar(pair) cdr(cdr(car(car(pair))))
+#define cddadr(pair) cdr(cdr(car(cdr(pair))))
+#define cdddar(pair) cdr(cdr(cdr(car(pair))))
+#define cddddr(pair) cdr(cdr(cdr(cdr(pair))))
 
 Obj *cons(Obj *car, Obj *cdr)
 {
@@ -113,6 +152,9 @@ void init()
   thenull = allocobj();
   thenull->type = _NULL;
 
+  thetrue = makeboolean(1);
+  thefalse = makeboolean(0);
+
   interned = thenull;
   globalenv = thenull;
 
@@ -120,6 +162,7 @@ void init()
   INIT_CONSTANT_SYMBOL(define);
   INIT_CONSTANT_SYMBOL(ok);
   theset = MAKE_CONSTANT_SYMBOL("set!");
+  INIT_CONSTANT_SYMBOL(if);
 }
 
 int peek()
@@ -160,10 +203,8 @@ Obj *readpair()
     getchar();
     pair->data.pair.cdr = read();
     skipwhitespace();
-    if (getchar() != ')') {
-      fprintf(stderr, "invalid use of .\n");
-      longjmp(errbuf, 1);
-    }
+    if (getchar() != ')')
+      ERROR("invalid use of .\n");
   } else
     pair->data.pair.cdr = readpair();
   return pair;
@@ -183,10 +224,18 @@ Obj *read()
   case '(':
     return readpair();
   case ')':
-    fprintf(stderr, "unbalanced parenthesis\n");
-    longjmp(errbuf, 1);
+    ERROR("unbalanced parenthesis\n");
   case '\'':
     return cons(thequote, cons(read(), thenull));
+  case '#':
+    switch (getchar()) {
+    case 't':
+      return thetrue;
+    case 'f':
+      return thefalse;
+    default:
+      ERROR("# not followed by t or f\n");
+    }
   default:
     ungetc(c, stdin);
     for (i = 0; !isdelimiter(c = getchar()); readbuffer[i++] = c);
@@ -195,8 +244,7 @@ Obj *read()
     return makesymbol(readbuffer, i+1);
   }
 
-  fprintf(stderr, "invalid input\n");
-  longjmp(errbuf, 1);
+  ERROR("invalid input\n");
 }
 
 Obj *lookup(Obj *sym, Obj *env)
@@ -205,8 +253,7 @@ Obj *lookup(Obj *sym, Obj *env)
     if (caar(o) == sym)
       return car(o);
 
-  fprintf(stderr, "unbound variable\n");
-  longjmp(errbuf, 1);
+  ERROR("unbound variable\n");
 }
 
 int length(Obj *pair)
@@ -220,15 +267,18 @@ int length(Obj *pair)
   do {									\
     int len = length(cdr(pair));					\
     if (len != n) {							\
-      fprintf(stderr, "wrong # of args for " name " (%d instead of %d)\n", len, n); \
-      longjmp(errbuf, 1);						\
+      ERROR("wrong # of args for " name " (%d instead of %d)\n", len, n); \
     }									\
   } while (0);
 
+#define istruthy !isfalse
+
 Obj *eval(Obj *o)
 {
+ tailcall:
   switch (o->type) {
-  case INT:
+  case NUMBER:
+  case BOOLEAN:
     return o;
   case SYMBOL:
     return cdr(lookup(o, globalenv));
@@ -248,9 +298,16 @@ Obj *eval(Obj *o)
       pair->data.pair.cdr = eval(caddr(o));
       return theok;
     }
+    if (isif(car(o))) {
+      int len = length(cdr(o));
+      if (len != 2 && len != 3) {
+	ERROR("wrong # of args for if (%d instead of 2 or 3)\n", len);
+      }
+      o = istruthy(eval(cadr(o))) ? caddr(o) : (isnull(cdddr(o)) ? thefalse : cadddr(o));
+      goto tailcall;
+    }
   default:
-    fprintf(stderr, "cannot eval object\n");
-    longjmp(errbuf, 1);
+    ERROR("cannot eval object\n");
   }
 }
 
@@ -273,8 +330,11 @@ void printpair(Obj *o)
 void print(Obj *o)
 {
   switch (o->type) {
-  case INT:
+  case NUMBER:
     printf("%d", o->data.fixnum.val);
+    break;
+  case BOOLEAN:
+    printf("#%c", istrue(o) ? 't' : 'f');
     break;
   case SYMBOL:
     printf("%s", o->data.symbol.name);
@@ -299,7 +359,7 @@ int main()
 {
   init();
   while (1) {
-    setjmp(errbuf); /* should this be inside the while(1)? */
+    setjmp(errbuf); /* should this be inside the while (1)? */
     printf("> ");
     print(eval(read()));
     printf("\n");

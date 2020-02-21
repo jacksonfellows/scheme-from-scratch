@@ -161,6 +161,35 @@ Obj *plus(Obj *args)
   return makefixnum(sum);
 }
 
+int length(Obj *pair)
+{
+  int len = 0;
+  for (Obj *o = pair; !isnull(o); o = cdr(o), ++len);
+  return len;
+}
+
+#define NEED_N_ARGS(pair, name, n)					\
+  do {									\
+    int len = length(pair);						\
+    if (len != n) {							\
+      ERROR("wrong # of args for " name " (%d instead of %d)\n", len, n); \
+    }									\
+  } while (0);
+
+#define TYPE_PREDICATE(name, _type)				\
+  Obj* name##p(Obj *args)					\
+  {								\
+    NEED_N_ARGS(args, #name "?", 1);				\
+    return car(args)->type == _type ? thetrue : thefalse;	\
+  }
+
+TYPE_PREDICATE(null, _NULL);
+TYPE_PREDICATE(boolean, BOOLEAN);
+TYPE_PREDICATE(symbol, SYMBOL);
+TYPE_PREDICATE(number, NUMBER);
+TYPE_PREDICATE(pair, PAIR);
+TYPE_PREDICATE(procedure, PRIM_PROC);
+
 #define MAKE_CONSTANT_SYMBOL(str) makesymbol(str, sizeof(str))
 #define INIT_CONSTANT_SYMBOL(name) the##name = MAKE_CONSTANT_SYMBOL(#name)
 #define MAKE_PRIM_PROC(name, proc) PUSH(cons(MAKE_CONSTANT_SYMBOL(#name), makeprimproc(proc)), globalenv)
@@ -183,6 +212,13 @@ void init()
   INIT_CONSTANT_SYMBOL(ok);
   theset = MAKE_CONSTANT_SYMBOL("set!");
   INIT_CONSTANT_SYMBOL(if);
+
+  MAKE_PRIM_PROC(null?, nullp);
+  MAKE_PRIM_PROC(boolean?, booleanp);
+  MAKE_PRIM_PROC(symbol?, symbolp);
+  MAKE_PRIM_PROC(number?, numberp);
+  MAKE_PRIM_PROC(pair?, pairp);
+  MAKE_PRIM_PROC(procedure?, procedurep);
 
   MAKE_PRIM_PROC(+, plus);
 }
@@ -278,22 +314,14 @@ Obj *lookup(Obj *sym, Obj *env)
   ERROR("unbound variable\n");
 }
 
-int length(Obj *pair)
-{
-  int len = 0;
-  for (Obj *o = pair; !isnull(o); o = cdr(o), ++len);
-  return len;
-}
-
-#define NEED_N_ARGS(pair, name, n)					\
-  do {									\
-    int len = length(cdr(pair));					\
-    if (len != n) {							\
-      ERROR("wrong # of args for " name " (%d instead of %d)\n", len, n); \
-    }									\
-  } while (0);
-
 #define istruthy !isfalse
+
+Obj *map(Obj *(*proc)(Obj *args), Obj *list)
+{
+  if (isnull(list))
+    return thenull;
+  return cons((*proc)(car(list)), map(proc, cdr(list)));
+}
 
 Obj *eval(Obj *o)
 {
@@ -306,16 +334,16 @@ Obj *eval(Obj *o)
     return cdr(lookup(o, globalenv));
   case PAIR:
     if (isquote(car(o))) {
-      NEED_N_ARGS(o, "quote", 1);
+      NEED_N_ARGS(cdr(o), "quote", 1);
       return cadr(o);
     }
     if (isdefine(car(o))) {
-      NEED_N_ARGS(o, "define", 2);
+      NEED_N_ARGS(cdr(o), "define", 2);
       PUSH(cons(cadr(o), eval(caddr(o))), globalenv);
       return theok;
     }
     if (isset(car(o))) {
-      NEED_N_ARGS(o, "set!", 2);
+      NEED_N_ARGS(cdr(o), "set!", 2);
       Obj *pair = lookup(cadr(o), globalenv);
       pair->data.pair.cdr = eval(caddr(o));
       return theok;
@@ -331,7 +359,7 @@ Obj *eval(Obj *o)
     Obj *proc = eval(car(o));
     if (proc->type != PRIM_PROC)
       ERROR("not a procedure\n");
-    return (*(proc->data.primproc.proc))(cdr(o));
+    return (*(proc->data.primproc.proc))(map(eval, cdr(o)));
   default:
     ERROR("cannot eval object\n");
   }

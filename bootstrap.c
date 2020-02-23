@@ -228,7 +228,7 @@ FIXNUM_TRUE_FOR_PAIRS(fixnumle, "<=", <=);
   Obj* name##p(Obj *args)			\
   {						\
     NEED_N_ARGS(args, #name "?", 1);		\
-    return TOBOOLEAN(car(args)->type);		\
+    return TOBOOLEAN(car(args)->type == _type);	\
   }
 
 TYPE_PREDICATE(null, _NULL);

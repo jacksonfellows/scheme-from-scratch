@@ -162,20 +162,6 @@ int length(Obj *pair)
   return len;
 }
 
-#define NEED_N_ARGS(pair, name, n)					\
-  do {									\
-    int len = length(pair);						\
-    if (len != n)							\
-      ERROR("wrong # of args for " name " (%d instead of %d)\n", len, n); \
-  } while (0);
-
-#define NEED_GE_N_ARGS(pair, name, n)					\
-  do {									\
-    int len = length(pair);						\
-    if (len < n)							\
-      ERROR("wrong # of args for " name " (%d instead of %d+)\n", len, n); \
-  } while (0);
-
 Obj *add(Obj *args)
 {
   int sum = 0;
@@ -186,7 +172,6 @@ Obj *add(Obj *args)
 
 Obj *sub(Obj *args)
 {
-  NEED_GE_N_ARGS(args, "-", 1);
   int sum;
   if (length(args) == 1)
     return makefixnum(-car(args)->data.fixnum.val);
@@ -208,7 +193,6 @@ Obj *mul(Obj *args)
 #define FIXNUM_TRUE_FOR_PAIRS(procname, name, op)			\
   Obj* procname(Obj *args)						\
   {									\
-    NEED_GE_N_ARGS(args, name, 1);					\
     Obj *last = car(args);						\
     for (Obj *o = cdr(args); !isnull(o); last = car(o), o = cdr(o))	\
       if (!(last->data.fixnum.val op car(o)->data.fixnum.val))		\
@@ -225,7 +209,6 @@ FIXNUM_TRUE_FOR_PAIRS(fixnumle, "<=", <=);
 #define TYPE_PREDICATE(name, _type)		\
   Obj* name##p(Obj *args)			\
   {						\
-    NEED_N_ARGS(args, #name "?", 1);		\
     return TOBOOLEAN(car(args)->type == _type);	\
   }
 
@@ -238,7 +221,6 @@ TYPE_PREDICATE(procedure, PRIM_PROC);
 
 Obj *lengthproc(Obj *args)
 {
-  NEED_N_ARGS(args, "length", 1);
   return makefixnum(length(car(args)));
 }
 
@@ -395,25 +377,18 @@ Obj *eval(Obj *o)
   case SYMBOL:
     return cdr(lookup(o, globalenv));
   case PAIR:
-    if (isquote(car(o))) {
-      NEED_N_ARGS(cdr(o), "quote", 1);
+    if (isquote(car(o)))
       return cadr(o);
-    }
     if (isdefine(car(o))) {
-      NEED_N_ARGS(cdr(o), "define", 2);
       PUSH(cons(cadr(o), eval(caddr(o))), globalenv);
       return theok;
     }
     if (isset(car(o))) {
-      NEED_N_ARGS(cdr(o), "set!", 2);
       Obj *pair = lookup(cadr(o), globalenv);
       pair->data.pair.cdr = eval(caddr(o));
       return theok;
     }
     if (isif(car(o))) {
-      int len = length(cdr(o));
-      if (len != 2 && len != 3)
-	ERROR("wrong # of args for if (%d instead of 2 or 3)\n", len);
       o = istruthy(eval(cadr(o))) ? caddr(o) : (isnull(cdddr(o)) ? thefalse : cadddr(o));
       goto tailcall;
     }

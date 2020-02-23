@@ -266,6 +266,11 @@ Obj *list(Obj *args)
   return args;
 }
 
+Obj *eq(Obj *args)
+{
+  return TOBOOLEAN(car(args) == cadr(args));
+}
+
 #define MAKE_CONSTANT_SYMBOL(str) makesymbol(str, sizeof(str))
 #define INIT_CONSTANT_SYMBOL(name) the##name = MAKE_CONSTANT_SYMBOL(#name)
 #define MAKE_PRIM_PROC(name, proc) PUSH(cons(MAKE_CONSTANT_SYMBOL(#name), makeprimproc(proc)), globalenv)
@@ -314,6 +319,8 @@ void init()
   MAKE_PRIM_PROC(list, list);
 
   MAKE_PRIM_PROC(length, lengthproc);
+
+  MAKE_PRIM_PROC(eq?, eq);
 }
 
 int peek()

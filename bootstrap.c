@@ -88,6 +88,16 @@ Obj *cdr(Obj *pair)
   return pair->data.pair.cdr;
 }
 
+void setcar(Obj *pair, Obj *o)
+{
+  pair->data.pair.car = o;
+}
+
+void setcdr(Obj *pair, Obj *o)
+{
+  pair->data.pair.cdr = o;
+}
+
 #define caar(pair) car(car(pair))
 #define cadr(pair) car(cdr(pair))
 #define cdar(pair) cdr(car(pair))
@@ -123,8 +133,8 @@ Obj *cons(Obj *car, Obj *cdr)
 {
   Obj *pair = allocobj();
   pair->type = PAIR;
-  pair->data.pair.car = car;
-  pair->data.pair.cdr = cdr;
+  setcar(pair, car);
+  setcdr(pair, cdr);
   return pair;
 }
 
@@ -224,6 +234,38 @@ Obj *lengthproc(Obj *args)
   return makefixnum(length(car(args)));
 }
 
+Obj *carproc(Obj *args)
+{
+  return caar(args);
+}
+
+Obj *cdrproc(Obj *args)
+{
+  return cdar(args);
+}
+
+Obj *setcarproc(Obj *args)
+{
+  setcar(car(args), cadr(args));
+  return theok;
+}
+
+Obj *setcdrproc(Obj *args)
+{
+  setcdr(car(args), cadr(args));
+  return theok;
+}
+
+Obj *consproc(Obj *args)
+{
+  return cons(car(args), cadr(args));
+}
+
+Obj *list(Obj *args)
+{
+  return args;
+}
+
 #define MAKE_CONSTANT_SYMBOL(str) makesymbol(str, sizeof(str))
 #define INIT_CONSTANT_SYMBOL(name) the##name = MAKE_CONSTANT_SYMBOL(#name)
 #define MAKE_PRIM_PROC(name, proc) PUSH(cons(MAKE_CONSTANT_SYMBOL(#name), makeprimproc(proc)), globalenv)
@@ -264,6 +306,13 @@ void init()
   MAKE_PRIM_PROC(>, fixnumgt);
   MAKE_PRIM_PROC(>=, fixnumge);
 
+  MAKE_PRIM_PROC(car, carproc);
+  MAKE_PRIM_PROC(cdr, cdrproc);
+  MAKE_PRIM_PROC(set-car!, setcarproc);
+  MAKE_PRIM_PROC(set-cdr!, setcdrproc);
+  MAKE_PRIM_PROC(cons, consproc);
+  MAKE_PRIM_PROC(list, list);
+
   MAKE_PRIM_PROC(length, lengthproc);
 }
 
@@ -298,17 +347,17 @@ Obj *readpair()
 
   Obj *pair = allocobj();
   pair->type = PAIR;
-  pair->data.pair.car = read();
+  setcar(pair, read());
 
   skipwhitespace();
   if (peek() == '.') {
     getchar();
-    pair->data.pair.cdr = read();
+    setcdr(pair, read());
     skipwhitespace();
     if (getchar() != ')')
       ERROR("invalid use of .\n");
   } else
-    pair->data.pair.cdr = readpair();
+    setcdr(pair, readpair());
   return pair;
 }
 
@@ -385,7 +434,7 @@ Obj *eval(Obj *o)
     }
     if (isset(car(o))) {
       Obj *pair = lookup(cadr(o), globalenv);
-      pair->data.pair.cdr = eval(caddr(o));
+      setcdr(pair, eval(caddr(o)));
       return theok;
     }
     if (isif(car(o))) {

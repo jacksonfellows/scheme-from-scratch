@@ -238,6 +238,12 @@ TYPE_PREDICATE(number, NUMBER);
 TYPE_PREDICATE(pair, PAIR);
 TYPE_PREDICATE(procedure, PRIM_PROC);
 
+Obj *lengthproc(Obj *args)
+{
+  NEED_N_ARGS(args, "length", 1);
+  return makefixnum(length(car(args)));
+}
+
 #define MAKE_CONSTANT_SYMBOL(str) makesymbol(str, sizeof(str))
 #define INIT_CONSTANT_SYMBOL(name) the##name = MAKE_CONSTANT_SYMBOL(#name)
 #define MAKE_PRIM_PROC(name, proc) PUSH(cons(MAKE_CONSTANT_SYMBOL(#name), makeprimproc(proc)), globalenv)
@@ -278,6 +284,7 @@ void init()
   MAKE_PRIM_PROC(>, fixnumgt);
   MAKE_PRIM_PROC(>=, fixnumge);
 
+  MAKE_PRIM_PROC(length, lengthproc);
 }
 
 int peek()

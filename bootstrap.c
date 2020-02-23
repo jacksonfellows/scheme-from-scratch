@@ -207,22 +207,28 @@ Obj *mul(Obj *args)
   return makefixnum(product);
 }
 
+#define FIXNUM_TRUE_FOR_PAIRS(procname, name, op)			\
+  Obj* procname(Obj *args)						\
+  {									\
+    NEED_GE_N_ARGS(args, name, 1);					\
+    Obj *last = car(args);						\
+    for (Obj *o = cdr(args); !isnull(o); last = car(o), o = cdr(o))	\
+      if (!(last->data.fixnum.val op car(o)->data.fixnum.val))		\
+	return thefalse;						\
+    return thetrue;							\
+  }
 
-Obj *fixnumeq(Obj *args)
-{
-  NEED_GE_N_ARGS(args, "=", 1);
-  Obj *last = car(args);
-  for (Obj *o = cdr(args); !isnull(o); last = car(o), o = cdr(o))
-    if (last->data.fixnum.val != car(o)->data.fixnum.val)
-      return thefalse;
-  return thetrue;
-}
+FIXNUM_TRUE_FOR_PAIRS(fixnumeq, "=", ==);
+FIXNUM_TRUE_FOR_PAIRS(fixnumgt, ">", >);
+FIXNUM_TRUE_FOR_PAIRS(fixnumge, ">=", >=);
+FIXNUM_TRUE_FOR_PAIRS(fixnumlt, "<", <);
+FIXNUM_TRUE_FOR_PAIRS(fixnumle, "<=", <=);
 
-#define TYPE_PREDICATE(name, _type)				\
-  Obj* name##p(Obj *args)					\
-  {								\
-    NEED_N_ARGS(args, #name "?", 1);				\
-    return TOBOOLEAN(car(args)->type);				\
+#define TYPE_PREDICATE(name, _type)		\
+  Obj* name##p(Obj *args)			\
+  {						\
+    NEED_N_ARGS(args, #name "?", 1);		\
+    return TOBOOLEAN(car(args)->type);		\
   }
 
 TYPE_PREDICATE(null, _NULL);
@@ -265,7 +271,13 @@ void init()
   MAKE_PRIM_PROC(+, add);
   MAKE_PRIM_PROC(-, sub);
   MAKE_PRIM_PROC(*, mul);
+
   MAKE_PRIM_PROC(=, fixnumeq);
+  MAKE_PRIM_PROC(<, fixnumlt);
+  MAKE_PRIM_PROC(<=, fixnumle);
+  MAKE_PRIM_PROC(>, fixnumgt);
+  MAKE_PRIM_PROC(>=, fixnumge);
+
 }
 
 int peek()

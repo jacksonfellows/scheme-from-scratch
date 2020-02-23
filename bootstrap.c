@@ -78,21 +78,15 @@ Obj *makeboolean(int x)
 
 #define TOBOOLEAN(x) x ? thetrue : thefalse
 
-#define ASSERT_TYPE(obj, _type)			\
-  do {						\
-    if (obj->type != _type)			\
-      ERROR("invalid type\n");			\
-  } while (0);
-
 Obj *car(Obj *pair)
 {
-  ASSERT_TYPE(pair, PAIR);
+  /* if (pair->type != PAIR) */
+  /*   ERROR */
   return pair->data.pair.car;
 }
 
 Obj *cdr(Obj *pair)
 {
-  ASSERT_TYPE(pair, PAIR);
   return pair->data.pair.cdr;
 }
 

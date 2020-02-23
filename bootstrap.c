@@ -80,8 +80,6 @@ Obj *makeboolean(int x)
 
 Obj *car(Obj *pair)
 {
-  /* if (pair->type != PAIR) */
-  /*   ERROR */
   return pair->data.pair.car;
 }
 

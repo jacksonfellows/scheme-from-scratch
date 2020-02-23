@@ -76,6 +76,8 @@ Obj *makeboolean(int x)
   return boolean;
 }
 
+#define TOBOOLEAN(x) x ? thetrue : thefalse
+
 Obj *car(Obj *pair)
 {
   return pair->data.pair.car;
@@ -160,6 +162,22 @@ int length(Obj *pair)
   return len;
 }
 
+#define NEED_N_ARGS(pair, name, n)					\
+  do {									\
+    int len = length(pair);						\
+    if (len != n) {							\
+      ERROR("wrong # of args for " name " (%d instead of %d)\n", len, n); \
+    }									\
+  } while (0);
+
+#define NEED_GE_N_ARGS(pair, name, n)					\
+  do {									\
+    int len = length(pair);						\
+    if (len < n) {							\
+      ERROR("wrong # of args for " name " (%d instead of %d+)\n", len, n); \
+    }									\
+  } while (0);
+
 Obj *add(Obj *args)
 {
   int sum = 0;
@@ -170,16 +188,15 @@ Obj *add(Obj *args)
 
 Obj *sub(Obj *args)
 {
+  NEED_GE_N_ARGS(args, "-", 1);
   int sum;
-  switch (length(args)) {
-  case 0: return 0;
-  case 1: return makefixnum(-car(args)->data.fixnum.val);
-  default:
-    sum = car(args)->data.fixnum.val;
-    for (Obj *o = cdr(args); !isnull(o); o = cdr(o))
-      sum -= car(o)->data.fixnum.val;
-    return makefixnum(sum);
-  }
+  if (length(args) == 1)
+    return makefixnum(-car(args)->data.fixnum.val);
+
+  sum = car(args)->data.fixnum.val;
+  for (Obj *o = cdr(args); !isnull(o); o = cdr(o))
+    sum -= car(o)->data.fixnum.val;
+  return makefixnum(sum);
 }
 
 Obj *mul(Obj *args)
@@ -190,19 +207,22 @@ Obj *mul(Obj *args)
   return makefixnum(product);
 }
 
-#define NEED_N_ARGS(pair, name, n)					\
-  do {									\
-    int len = length(pair);						\
-    if (len != n) {							\
-      ERROR("wrong # of args for " name " (%d instead of %d)\n", len, n); \
-    }									\
-  } while (0);
+
+Obj *fixnumeq(Obj *args)
+{
+  NEED_GE_N_ARGS(args, "=", 1);
+  Obj *last = car(args);
+  for (Obj *o = cdr(args); !isnull(o); last = car(o), o = cdr(o))
+    if (last->data.fixnum.val != car(o)->data.fixnum.val)
+      return thefalse;
+  return thetrue;
+}
 
 #define TYPE_PREDICATE(name, _type)				\
   Obj* name##p(Obj *args)					\
   {								\
     NEED_N_ARGS(args, #name "?", 1);				\
-    return car(args)->type == _type ? thetrue : thefalse;	\
+    return TOBOOLEAN(car(args)->type);				\
   }
 
 TYPE_PREDICATE(null, _NULL);
@@ -245,6 +265,7 @@ void init()
   MAKE_PRIM_PROC(+, add);
   MAKE_PRIM_PROC(-, sub);
   MAKE_PRIM_PROC(*, mul);
+  MAKE_PRIM_PROC(=, fixnumeq);
 }
 
 int peek()

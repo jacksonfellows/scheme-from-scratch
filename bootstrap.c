@@ -80,6 +80,8 @@ Obj *makeboolean(int x)
 
 Obj *car(Obj *pair)
 {
+  /* if (pair->type != PAIR) */
+  /*   ERROR */
   return pair->data.pair.car;
 }
 
@@ -165,17 +167,15 @@ int length(Obj *pair)
 #define NEED_N_ARGS(pair, name, n)					\
   do {									\
     int len = length(pair);						\
-    if (len != n) {							\
+    if (len != n)							\
       ERROR("wrong # of args for " name " (%d instead of %d)\n", len, n); \
-    }									\
   } while (0);
 
 #define NEED_GE_N_ARGS(pair, name, n)					\
   do {									\
     int len = length(pair);						\
-    if (len < n) {							\
+    if (len < n)							\
       ERROR("wrong # of args for " name " (%d instead of %d+)\n", len, n); \
-    }									\
   } while (0);
 
 Obj *add(Obj *args)
@@ -414,9 +414,8 @@ Obj *eval(Obj *o)
     }
     if (isif(car(o))) {
       int len = length(cdr(o));
-      if (len != 2 && len != 3) {
+      if (len != 2 && len != 3)
 	ERROR("wrong # of args for if (%d instead of 2 or 3)\n", len);
-      }
       o = istruthy(eval(cadr(o))) ? caddr(o) : (isnull(cdddr(o)) ? thefalse : cadddr(o));
       goto tailcall;
     }

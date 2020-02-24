@@ -60,6 +60,8 @@ DECLARE_CONSTANT(set);
 DECLARE_CONSTANT(if);
 DECLARE_CONSTANT(lambda);
 DECLARE_CONSTANT(begin);
+DECLARE_CONSTANT(cond);
+DECLARE_CONSTANT(else);
 
 Obj *allocobj()
 {
@@ -316,6 +318,8 @@ void init()
   INIT_CONSTANT_SYMBOL(if);
   INIT_CONSTANT_SYMBOL(lambda);
   INIT_CONSTANT_SYMBOL(begin);
+  INIT_CONSTANT_SYMBOL(cond);
+  INIT_CONSTANT_SYMBOL(else);
 
   MAKE_PRIM_PROC(null?, nullp);
   MAKE_PRIM_PROC(boolean?, booleanp);
@@ -476,7 +480,17 @@ Obj *evalall(Obj *list, Obj *env)
   return cons(eval(car(list), env), evalall(cdr(list), env));
 }
 
-void print(Obj *o);
+Obj *condtoif(Obj *condforms)
+{
+  if (isnull(condforms))
+    return thefalse;
+  if (iselse(caar(condforms)))
+    return cons(thebegin, cdar(condforms));
+  return cons(theif,
+	      cons(caar(condforms),
+		   cons(cons(thebegin, cdar(condforms)),
+			cons(condtoif(cdr(condforms)), thenull))));
+}
 
 #define ISTRUTHY !isfalse
 
@@ -516,6 +530,8 @@ Obj *eval(Obj *o, Obj *env)
       o = car(o);
       goto tailcall;
     }
+    if (iscond(car(o)))
+      return eval(condtoif(cdr(o)), env);
 
     Obj *proc = eval(car(o), env);
     switch (proc->type) {
@@ -534,6 +550,8 @@ Obj *eval(Obj *o, Obj *env)
     ERROR("cannot eval object\n");
   }
 }
+
+void print(Obj *o);
 
 void printpair(Obj *o)
 {

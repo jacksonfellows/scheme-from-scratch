@@ -12,7 +12,7 @@ jmp_buf errbuf;
     longjmp(errbuf, 1);				\
   } while (0);
 
-typedef enum { NUMBER, SYMBOL, PAIR, _NULL, BOOLEAN, PRIM_PROC } Type;
+typedef enum { NUMBER, SYMBOL, PAIR, _NULL, BOOLEAN, PRIM_PROC, COMP_PROC } Type;
 
 typedef struct sObj {
   Type type;
@@ -33,6 +33,11 @@ typedef struct sObj {
     struct {
       struct sObj *(*proc)(struct sObj *args);
     } primproc;
+    struct {
+      struct sObj *formals;
+      struct sObj *body;
+      struct sObj *env;
+    } compproc;
   } data;
 } Obj;
 
@@ -53,6 +58,7 @@ DECLARE_CONSTANT(define);
 DECLARE_CONSTANT(ok);
 DECLARE_CONSTANT(set);
 DECLARE_CONSTANT(if);
+DECLARE_CONSTANT(lambda);
 
 Obj *allocobj()
 {
@@ -165,6 +171,16 @@ Obj *makeprimproc(Obj *(*proc)(Obj *args))
   return primproc;
 }
 
+Obj *makecompproc(Obj *formals, Obj *body, Obj *env)
+{
+  Obj *compproc = allocobj();
+  compproc->type = COMP_PROC;
+  compproc->data.compproc.formals = formals;
+  compproc->data.compproc.body = body;
+  compproc->data.compproc.env = env;
+  return compproc;
+}
+
 int length(Obj *pair)
 {
   int len = 0;
@@ -227,7 +243,11 @@ TYPE_PREDICATE(boolean, BOOLEAN);
 TYPE_PREDICATE(symbol, SYMBOL);
 TYPE_PREDICATE(number, NUMBER);
 TYPE_PREDICATE(pair, PAIR);
-TYPE_PREDICATE(procedure, PRIM_PROC);
+
+Obj *procedurep(Obj *args)
+{
+  return TOBOOLEAN(car(args)->type == PRIM_PROC || car(args)->type == COMP_PROC);
+}
 
 Obj *lengthproc(Obj *args)
 {
@@ -293,6 +313,7 @@ void init()
   INIT_CONSTANT_SYMBOL(ok);
   theset = MAKE_CONSTANT_SYMBOL("set!");
   INIT_CONSTANT_SYMBOL(if);
+  INIT_CONSTANT_SYMBOL(lambda);
 
   MAKE_PRIM_PROC(null?, nullp);
   MAKE_PRIM_PROC(boolean?, booleanp);
@@ -405,25 +426,59 @@ Obj *read()
   ERROR("invalid input\n");
 }
 
-Obj *lookup(Obj *sym, Obj *env)
-{
-  for (Obj *o = env; !isnull(o); o = cdr(o))
-    if (caar(o) == sym)
-      return car(o);
-
-  ERROR("unbound variable\n");
-}
-
 #define ISTRUTHY !isfalse
 
-Obj *map(Obj *(*proc)(Obj *args), Obj *list)
+Obj *eval(Obj *o, Obj *env);
+
+Obj *evalall(Obj *list, Obj *env)
 {
   if (isnull(list))
     return thenull;
-  return cons((*proc)(car(list)), map(proc, cdr(list)));
+  return cons(eval(car(list), env), evalall(cdr(list), env));
 }
 
-Obj *eval(Obj *o)
+Obj *makealist(Obj *a, Obj *b)
+{
+  if (isnull(a))
+    return thenull;
+  return cons(cons(car(a), car(b)), makealist(cdr(a), cdr(b)));
+}
+
+Obj *framelookup(Obj *sym, Obj *frame)
+{
+  for (Obj *o = frame; !isnull(o); o = cdr(o))
+    if (caar(o) == sym)
+      return car(o);
+
+  return thenull;
+}
+
+Obj *envlookup(Obj *sym, Obj *env)
+{
+  for (Obj *o = env; !isnull(o); o = cdr(o)) {
+    Obj *binding = framelookup(sym, car(o));
+    if (!isnull(binding))
+      return binding;
+  }
+  ERROR("unbound variable\n");
+}
+void define(Obj *sym, Obj *val, Obj *env)
+{
+  for (Obj *o = env; !isnull(o); o = cdr(o)) {
+    Obj *binding = framelookup(sym, car(o));
+    if (!isnull(binding)) {
+      setcdr(binding, val);
+      return;
+    }
+  }
+  Obj *o;
+  for (o = car(env); !isnull(cdr(o)); o = cdr(o));
+  setcdr(o, cons(cons(sym, val), thenull));
+}
+
+void print(Obj *o);
+
+Obj *eval(Obj *o, Obj *env)
 {
  tailcall:
   switch (o->type) {
@@ -431,33 +486,46 @@ Obj *eval(Obj *o)
   case BOOLEAN:
     return o;
   case SYMBOL:
-    return cdr(lookup(o, globalenv));
+    return cdr(envlookup(o, env));
   case PAIR:
     if (isquote(car(o)))
       return cadr(o);
     if (isdefine(car(o))) {
-      PUSH(cons(cadr(o), eval(caddr(o))), globalenv);
+      if (cadr(o)->type == PAIR)
+	define(caadr(o), eval(cons(thelambda, cons(cdadr(o), cddr(o))), env), env);
+      else
+	define(cadr(o), eval(caddr(o), env), env);
       return theok;
     }
     if (isset(car(o))) {
-      Obj *pair = lookup(cadr(o), globalenv);
-      setcdr(pair, eval(caddr(o)));
+      Obj *pair = envlookup(cadr(o), env);
+      setcdr(pair, eval(caddr(o), env));
       return theok;
     }
     if (isif(car(o))) {
-      o = ISTRUTHY(eval(cadr(o))) ? caddr(o) : (isnull(cdddr(o)) ? thefalse : cadddr(o));
+      o = ISTRUTHY(eval(cadr(o), env)) ? caddr(o) : (isnull(cdddr(o)) ? thefalse : cadddr(o));
       goto tailcall;
     }
-    Obj *proc = eval(car(o));
-    if (proc->type != PRIM_PROC)
+    if (islambda(car(o)))
+      return makecompproc(cadr(o), cddr(o), env);
+
+    Obj *proc = eval(car(o), env);
+    switch (proc->type) {
+    case PRIM_PROC:
+      return (*(proc->data.primproc.proc))(evalall(cdr(o), env));
+    case COMP_PROC:
+      env = cons(makealist(proc->data.compproc.formals, evalall(cdr(o), env)), proc->data.compproc.env);
+      for (o = proc->data.compproc.body; !isnull(cdr(o)); o = cdr(o))
+	eval(car(o), env);
+      o = car(o);
+      goto tailcall;
+    default:
       ERROR("not a procedure\n");
-    return (*(proc->data.primproc.proc))(map(eval, cdr(o)));
+    }
   default:
     ERROR("cannot eval object\n");
   }
 }
-
-void print(Obj *o);
 
 void printpair(Obj *o)
 {
@@ -499,6 +567,7 @@ void print(Obj *o)
     }
     break;
   case PRIM_PROC:
+  case COMP_PROC:
     printf("#<procedure>");
     break;
   }
@@ -507,10 +576,11 @@ void print(Obj *o)
 int main()
 {
   init();
+  Obj *env = cons(globalenv, thenull);
   while (1) {
     setjmp(errbuf); /* should this be inside the while (1)? */
     printf("> ");
-    print(eval(read()));
+    print(eval(read(), env));
     printf("\n");
   }
   return 0;

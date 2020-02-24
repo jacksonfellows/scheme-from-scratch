@@ -59,6 +59,7 @@ DECLARE_CONSTANT(ok);
 DECLARE_CONSTANT(set);
 DECLARE_CONSTANT(if);
 DECLARE_CONSTANT(lambda);
+DECLARE_CONSTANT(begin);
 
 Obj *allocobj()
 {
@@ -314,6 +315,7 @@ void init()
   theset = MAKE_CONSTANT_SYMBOL("set!");
   INIT_CONSTANT_SYMBOL(if);
   INIT_CONSTANT_SYMBOL(lambda);
+  INIT_CONSTANT_SYMBOL(begin);
 
   MAKE_PRIM_PROC(null?, nullp);
   MAKE_PRIM_PROC(boolean?, booleanp);
@@ -426,17 +428,6 @@ Obj *read()
   ERROR("invalid input\n");
 }
 
-#define ISTRUTHY !isfalse
-
-Obj *eval(Obj *o, Obj *env);
-
-Obj *evalall(Obj *list, Obj *env)
-{
-  if (isnull(list))
-    return thenull;
-  return cons(eval(car(list), env), evalall(cdr(list), env));
-}
-
 Obj *makealist(Obj *a, Obj *b)
 {
   if (isnull(a))
@@ -476,7 +467,18 @@ void define(Obj *sym, Obj *val, Obj *env)
   setcdr(o, cons(cons(sym, val), thenull));
 }
 
+Obj *eval(Obj *o, Obj *env);
+
+Obj *evalall(Obj *list, Obj *env)
+{
+  if (isnull(list))
+    return thenull;
+  return cons(eval(car(list), env), evalall(cdr(list), env));
+}
+
 void print(Obj *o);
+
+#define ISTRUTHY !isfalse
 
 Obj *eval(Obj *o, Obj *env)
 {
@@ -508,6 +510,12 @@ Obj *eval(Obj *o, Obj *env)
     }
     if (islambda(car(o)))
       return makecompproc(cadr(o), cddr(o), env);
+    if (isbegin(car(o))) {
+      for (o = cdr(o); !isnull(cdr(o)); o = cdr(o))
+	eval(car(o), env);
+      o = car(o);
+      goto tailcall;
+    }
 
     Obj *proc = eval(car(o), env);
     switch (proc->type) {

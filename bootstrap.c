@@ -414,7 +414,7 @@ Obj *lookup(Obj *sym, Obj *env)
   ERROR("unbound variable\n");
 }
 
-#define istruthy !isfalse
+#define ISTRUTHY !isfalse
 
 Obj *map(Obj *(*proc)(Obj *args), Obj *list)
 {
@@ -445,7 +445,7 @@ Obj *eval(Obj *o)
       return theok;
     }
     if (isif(car(o))) {
-      o = istruthy(eval(cadr(o))) ? caddr(o) : (isnull(cdddr(o)) ? thefalse : cadddr(o));
+      o = ISTRUTHY(eval(cadr(o))) ? caddr(o) : (isnull(cdddr(o)) ? thefalse : cadddr(o));
       goto tailcall;
     }
     Obj *proc = eval(car(o));

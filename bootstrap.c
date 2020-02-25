@@ -62,6 +62,7 @@ DECLARE_CONSTANT(lambda);
 DECLARE_CONSTANT(begin);
 DECLARE_CONSTANT(cond);
 DECLARE_CONSTANT(else);
+DECLARE_CONSTANT(let);
 
 Obj *allocobj()
 {
@@ -320,6 +321,7 @@ void init()
   INIT_CONSTANT_SYMBOL(begin);
   INIT_CONSTANT_SYMBOL(cond);
   INIT_CONSTANT_SYMBOL(else);
+  INIT_CONSTANT_SYMBOL(let);
 
   MAKE_PRIM_PROC(null?, nullp);
   MAKE_PRIM_PROC(boolean?, booleanp);
@@ -492,6 +494,17 @@ Obj *condtoif(Obj *condforms)
 			cons(condtoif(cdr(condforms)), thenull))));
 }
 
+Obj *lettolambda(Obj *letforms)
+{
+  Obj *formals = thenull;
+  Obj *values = thenull;
+  for (Obj *o = car(letforms); !isnull(o); o = cdr(o)) {
+    PUSH(caar(o), formals);
+    PUSH(cadar(o), values);
+  }
+  return cons(cons(thelambda, cons(formals, cdr(letforms))), values);
+}
+
 #define ISTRUTHY !isfalse
 
 Obj *eval(Obj *o, Obj *env)
@@ -532,6 +545,8 @@ Obj *eval(Obj *o, Obj *env)
     }
     if (iscond(car(o)))
       return eval(condtoif(cdr(o)), env);
+    if (islet(car(o)))
+      return eval(lettolambda(cdr(o)), env);
 
     Obj *proc = eval(car(o), env);
     switch (proc->type) {

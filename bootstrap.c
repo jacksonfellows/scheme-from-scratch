@@ -63,6 +63,8 @@ DECLARE_CONSTANT(begin);
 DECLARE_CONSTANT(cond);
 DECLARE_CONSTANT(else);
 DECLARE_CONSTANT(let);
+DECLARE_CONSTANT(and);
+DECLARE_CONSTANT(or);
 
 Obj *allocobj()
 {
@@ -322,6 +324,8 @@ void init()
   INIT_CONSTANT_SYMBOL(cond);
   INIT_CONSTANT_SYMBOL(else);
   INIT_CONSTANT_SYMBOL(let);
+  INIT_CONSTANT_SYMBOL(and);
+  INIT_CONSTANT_SYMBOL(or);
 
   MAKE_PRIM_PROC(null?, nullp);
   MAKE_PRIM_PROC(boolean?, booleanp);
@@ -549,6 +553,26 @@ Obj *eval(Obj *o, Obj *env)
     }
     if (islet(car(o))) {
       o = lettolambda(cdr(o));
+      goto tailcall;
+    }
+    if (isand(car(o))) {
+      if (isnull(cdr(o)))
+	return thetrue;
+      for (o = cdr(o); !isnull(cdr(o)); o = cdr(o))
+	if (isfalse(eval(car(o), env)))
+	  return thefalse;
+      o = car(o);
+      goto tailcall;
+    }
+    if (isor(car(o))) {
+      if (isnull(cdr(o)))
+	return thefalse;
+      for (o = cdr(o); !isnull(cdr(o)); o = cdr(o)) {
+	Obj *r = eval(car(o), env);
+	if (ISTRUTHY(r))
+	  return r;
+      }
+      o = car(o);
       goto tailcall;
     }
 

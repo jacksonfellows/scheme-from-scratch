@@ -543,10 +543,14 @@ Obj *eval(Obj *o, Obj *env)
       o = car(o);
       goto tailcall;
     }
-    if (iscond(car(o)))
-      return eval(condtoif(cdr(o)), env);
-    if (islet(car(o)))
-      return eval(lettolambda(cdr(o)), env);
+    if (iscond(car(o))) {
+      o = condtoif(cdr(o));
+      goto tailcall;
+    }
+    if (islet(car(o))) {
+      o = lettolambda(cdr(o));
+      goto tailcall;
+    }
 
     Obj *proc = eval(car(o), env);
     switch (proc->type) {

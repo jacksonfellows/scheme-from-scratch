@@ -66,6 +66,8 @@ DECLARE_CONSTANT(let);
 DECLARE_CONSTANT(and);
 DECLARE_CONSTANT(or);
 
+DECLARE_CONSTANT(apply);
+
 Obj *allocobj()
 {
   Obj *o = malloc(sizeof(Obj));
@@ -354,6 +356,9 @@ void init()
   MAKE_PRIM_PROC(length, lengthproc);
 
   MAKE_PRIM_PROC(eq?, eq);
+
+  INIT_CONSTANT_SYMBOL(apply);
+  MAKE_PRIM_PROC(apply, NULL);
 }
 
 int peek()
@@ -573,6 +578,10 @@ Obj *eval(Obj *o, Obj *env)
 	  return r;
       }
       o = car(o);
+      goto tailcall;
+    }
+    if (isapply(car(o))) {
+      o = cons(cadr(o), eval(caddr(o), env));
       goto tailcall;
     }
 

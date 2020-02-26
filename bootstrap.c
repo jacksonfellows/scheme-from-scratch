@@ -67,6 +67,7 @@ DECLARE_CONSTANT(and);
 DECLARE_CONSTANT(or);
 
 DECLARE_CONSTANT(apply);
+DECLARE_CONSTANT(eval);
 
 Obj *allocobj()
 {
@@ -301,9 +302,70 @@ Obj *eq(Obj *args)
 
 #define MAKE_CONSTANT_SYMBOL(str) makesymbol(str, sizeof(str))
 #define INIT_CONSTANT_SYMBOL(name) the##name = MAKE_CONSTANT_SYMBOL(#name)
-#define MAKE_PRIM_PROC(name, proc) PUSH(cons(MAKE_CONSTANT_SYMBOL(#name), makeprimproc(proc)), globalenv)
+#define MAKE_PRIM_PROC(env, name, proc) PUSH(cons(MAKE_CONSTANT_SYMBOL(#name), makeprimproc(proc)), env)
 
 Obj *globalenv;
+
+Obj *interactionenv(Obj *args)
+{
+  return globalenv;
+}
+
+Obj *nullenv(Obj *args)
+{
+  return cons(thenull, thenull);
+}
+
+Obj *initenv();
+
+Obj *makeenv(Obj *args)
+{
+  Obj *env = nullenv(thenull);
+  setcar(env, initenv());
+  return env;
+}
+
+Obj *initenv()
+{
+  Obj *env = thenull;
+
+  MAKE_PRIM_PROC(env, null?, nullp);
+  MAKE_PRIM_PROC(env, boolean?, booleanp);
+  MAKE_PRIM_PROC(env, symbol?, symbolp);
+  MAKE_PRIM_PROC(env, number?, numberp);
+  MAKE_PRIM_PROC(env, pair?, pairp);
+  MAKE_PRIM_PROC(env, procedure?, procedurep);
+
+  MAKE_PRIM_PROC(env, +, add);
+  MAKE_PRIM_PROC(env, -, sub);
+  MAKE_PRIM_PROC(env, *, mul);
+
+  MAKE_PRIM_PROC(env, =, fixnumeq);
+  MAKE_PRIM_PROC(env, <, fixnumlt);
+  MAKE_PRIM_PROC(env, <=, fixnumle);
+  MAKE_PRIM_PROC(env, >, fixnumgt);
+  MAKE_PRIM_PROC(env, >=, fixnumge);
+
+  MAKE_PRIM_PROC(env, car, carproc);
+  MAKE_PRIM_PROC(env, cdr, cdrproc);
+  MAKE_PRIM_PROC(env, set-car!, setcarproc);
+  MAKE_PRIM_PROC(env, set-cdr!, setcdrproc);
+  MAKE_PRIM_PROC(env, cons, consproc);
+  MAKE_PRIM_PROC(env, list, list);
+
+  MAKE_PRIM_PROC(env, length, lengthproc);
+
+  MAKE_PRIM_PROC(env, eq?, eq);
+
+  MAKE_PRIM_PROC(env, apply, NULL);
+  MAKE_PRIM_PROC(env, eval, NULL);
+
+  MAKE_PRIM_PROC(env, interaction-environment, interactionenv);
+  MAKE_PRIM_PROC(env, nullenv, nullenv);
+  MAKE_PRIM_PROC(env, environment, makeenv);
+
+  return env;
+}
 
 void init()
 {
@@ -329,36 +391,10 @@ void init()
   INIT_CONSTANT_SYMBOL(and);
   INIT_CONSTANT_SYMBOL(or);
 
-  MAKE_PRIM_PROC(null?, nullp);
-  MAKE_PRIM_PROC(boolean?, booleanp);
-  MAKE_PRIM_PROC(symbol?, symbolp);
-  MAKE_PRIM_PROC(number?, numberp);
-  MAKE_PRIM_PROC(pair?, pairp);
-  MAKE_PRIM_PROC(procedure?, procedurep);
-
-  MAKE_PRIM_PROC(+, add);
-  MAKE_PRIM_PROC(-, sub);
-  MAKE_PRIM_PROC(*, mul);
-
-  MAKE_PRIM_PROC(=, fixnumeq);
-  MAKE_PRIM_PROC(<, fixnumlt);
-  MAKE_PRIM_PROC(<=, fixnumle);
-  MAKE_PRIM_PROC(>, fixnumgt);
-  MAKE_PRIM_PROC(>=, fixnumge);
-
-  MAKE_PRIM_PROC(car, carproc);
-  MAKE_PRIM_PROC(cdr, cdrproc);
-  MAKE_PRIM_PROC(set-car!, setcarproc);
-  MAKE_PRIM_PROC(set-cdr!, setcdrproc);
-  MAKE_PRIM_PROC(cons, consproc);
-  MAKE_PRIM_PROC(list, list);
-
-  MAKE_PRIM_PROC(length, lengthproc);
-
-  MAKE_PRIM_PROC(eq?, eq);
-
   INIT_CONSTANT_SYMBOL(apply);
-  MAKE_PRIM_PROC(apply, NULL);
+  INIT_CONSTANT_SYMBOL(eval);
+
+  globalenv = initenv();
 }
 
 int peek()
@@ -477,9 +513,13 @@ void define(Obj *sym, Obj *val, Obj *env)
       return;
     }
   }
-  Obj *o;
-  for (o = car(env); !isnull(cdr(o)); o = cdr(o));
-  setcdr(o, cons(cons(sym, val), thenull));
+  if (isnull(car(env)))
+    setcar(env, cons(cons(sym, val), thenull));
+  else {
+    Obj *o;
+    for (o = car(env); !isnull(cdr(o)); o = cdr(o));
+    setcdr(o, cons(cons(sym, val), thenull));
+  }
 }
 
 Obj *eval(Obj *o, Obj *env);
@@ -582,6 +622,12 @@ Obj *eval(Obj *o, Obj *env)
     }
     if (isapply(car(o))) {
       o = cons(cadr(o), eval(caddr(o), env));
+      goto tailcall;
+    }
+    if (iseval(car(o))) {
+      Obj *newo = eval(cadr(o), env);
+      env = eval(caddr(o), env);
+      o = newo;
       goto tailcall;
     }
 

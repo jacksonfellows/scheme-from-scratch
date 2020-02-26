@@ -157,7 +157,8 @@ Obj *cons(Obj *car, Obj *cdr)
 
 Obj *interned;
 
-Obj *makesymbol(char *buffer, int len) {
+Obj *makesymbol(char *buffer, int len)
+{
   for (Obj *o = interned; !isnull(o); o = cdr(o))
     if (strncmp(car(o)->data.symbol.name, buffer, len) == 0)
       return car(o);
@@ -505,6 +506,7 @@ Obj *envlookup(Obj *sym, Obj *env)
   }
   ERROR("unbound variable\n");
 }
+
 void define(Obj *sym, Obj *val, Obj *env)
 {
   for (Obj *o = env; !isnull(o); o = cdr(o)) {

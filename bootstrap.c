@@ -352,6 +352,21 @@ Obj *makeenv(Obj *args)
   return env;
 }
 
+Obj *read();
+
+Obj *readproc(Obj *args)
+{
+  return read();
+}
+
+void write(Obj *o);
+
+Obj *writeproc(Obj *args)
+{
+  write(car(args));
+  return theok;
+}
+
 Obj *initenv()
 {
   Obj *env = thenull;
@@ -392,6 +407,10 @@ Obj *initenv()
   MAKE_PRIM_PROC(env, interaction-environment, interactionenv);
   MAKE_PRIM_PROC(env, nullenv, nullenv);
   MAKE_PRIM_PROC(env, environment, makeenv);
+
+  MAKE_PRIM_PROC(env, read, readproc);
+
+  MAKE_PRIM_PROC(env, write, writeproc);
 
   return env;
 }
@@ -444,8 +463,6 @@ void skipwhitespace()
   while (isspace(c = getchar()));
   ungetc(c, stdin);
 }
-
-Obj *read();
 
 Obj *readpair()
 {
@@ -733,8 +750,6 @@ Obj *eval(Obj *o, Obj *env)
     ERROR("cannot eval object\n");
   }
 }
-
-void write(Obj *o);
 
 void writepair(Obj *o)
 {

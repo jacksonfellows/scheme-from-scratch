@@ -275,6 +275,7 @@ FIXNUM_TRUE_FOR_PAIRS(fixnumle, "<=", <=);
 TYPE_PREDICATE(number, NUMBER);
 TYPE_PREDICATE(boolean, BOOLEAN);
 TYPE_PREDICATE(char, CHAR);
+TYPE_PREDICATE(string, STRING);
 TYPE_PREDICATE(symbol, SYMBOL);
 TYPE_PREDICATE(pair, PAIR);
 TYPE_PREDICATE(null, _NULL);
@@ -358,6 +359,7 @@ Obj *initenv()
   MAKE_PRIM_PROC(env, number?, numberp);
   MAKE_PRIM_PROC(env, boolean?, booleanp);
   MAKE_PRIM_PROC(env, char?, charp);
+  MAKE_PRIM_PROC(env, string?, stringp);
   MAKE_PRIM_PROC(env, symbol?, symbolp);
   MAKE_PRIM_PROC(env, pair?, pairp);
   MAKE_PRIM_PROC(env, null?, nullp);

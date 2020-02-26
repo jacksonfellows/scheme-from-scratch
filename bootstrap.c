@@ -734,23 +734,23 @@ Obj *eval(Obj *o, Obj *env)
   }
 }
 
-void print(Obj *o);
+void write(Obj *o);
 
-void printpair(Obj *o)
+void writepair(Obj *o)
 {
-  print(car(o));
+  write(car(o));
 
   if (isnull(cdr(o)));
   else if (cdr(o)->type == PAIR) {
     printf(" ");
-    printpair(cdr(o));
+    writepair(cdr(o));
   } else {
     printf(" . ");
-    print(cdr(o));
+    write(cdr(o));
   }
 }
 
-void print(Obj *o)
+void write(Obj *o)
 {
   switch (o->type) {
   case NUMBER:
@@ -798,10 +798,10 @@ void print(Obj *o)
   case PAIR:
     if (isquote(car(o))) {
       printf("'");
-      print(cadr(o));
+      write(cadr(o));
     } else {
       printf("(");
-      printpair(o);
+      writepair(o);
       printf(")");
     }
     break;
@@ -819,7 +819,7 @@ int main()
   while (1) {
     setjmp(errbuf); /* should this be inside the while (1)? */
     printf("> ");
-    print(eval(read(), env));
+    write(eval(read(), env));
     printf("\n");
   }
   return 0;

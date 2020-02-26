@@ -18,7 +18,7 @@ typedef struct sObj {
   Type type;
   union {
     struct {
-      int val;
+      long val;
     } fixnum;
     struct {
       int val;
@@ -75,11 +75,11 @@ Obj *allocobj()
   return o;
 }
 
-Obj *makefixnum(int x)
+Obj *makefixnum(long l)
 {
   Obj *fixnum = allocobj();
   fixnum->type = NUMBER;
-  fixnum->data.fixnum.val = x;
+  fixnum->data.fixnum.val = l;
   return fixnum;
 }
 
@@ -199,7 +199,7 @@ int length(Obj *pair)
 
 Obj *add(Obj *args)
 {
-  int sum = 0;
+  long sum = 0;
   for (Obj *o = args; !isnull(o); o = cdr(o))
     sum += car(o)->data.fixnum.val;
   return makefixnum(sum);
@@ -207,7 +207,7 @@ Obj *add(Obj *args)
 
 Obj *sub(Obj *args)
 {
-  int sum;
+  long sum;
   if (length(args) == 1)
     return makefixnum(-car(args)->data.fixnum.val);
 
@@ -219,7 +219,7 @@ Obj *sub(Obj *args)
 
 Obj *mul(Obj *args)
 {
-  int product = 1;
+  long product = 1;
   for (Obj *o = args; !isnull(o); o = cdr(o))
     product *= car(o)->data.fixnum.val;
   return makefixnum(product);
@@ -446,10 +446,10 @@ Obj *read()
 {
 #define BUFFER_LEN 1024
   char readbuffer[BUFFER_LEN];
-  int i;
 
-  if (scanf("%d", &i)) /* skips whitespace */
-    return makefixnum(i);
+  long l;
+  if (scanf("%ld", &l)) /* skips whitespace */
+    return makefixnum(l);
 
   int c = getchar();
   switch (c) {
@@ -470,6 +470,7 @@ Obj *read()
     }
   default:
     ungetc(c, stdin);
+    int i;
     for (i = 0; !isdelimiter(c = getchar()); readbuffer[i++] = c);
     ungetc(c, stdin);
     readbuffer[i] = '\0';
@@ -669,7 +670,7 @@ void print(Obj *o)
 {
   switch (o->type) {
   case NUMBER:
-    printf("%d", o->data.fixnum.val);
+    printf("%ld", o->data.fixnum.val);
     break;
   case BOOLEAN:
     printf("#%c", istrue(o) ? 't' : 'f');

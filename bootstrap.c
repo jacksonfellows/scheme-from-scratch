@@ -12,7 +12,7 @@ jmp_buf errbuf;
     longjmp(errbuf, 1);				\
   } while (0);
 
-typedef enum { NUMBER, BOOLEAN, CHAR, SYMBOL, PAIR, _NULL, PRIM_PROC, COMP_PROC } Type;
+typedef enum { NUMBER, BOOLEAN, CHAR, STRING, SYMBOL, PAIR, _NULL, PRIM_PROC, COMP_PROC } Type;
 
 typedef struct sObj {
   Type type;
@@ -26,6 +26,9 @@ typedef struct sObj {
     struct {
       char val;
     } _char;
+    struct {
+      char *val;
+    } string;
     struct {
       char *name;
     } symbol;
@@ -100,6 +103,16 @@ Obj *makechar(char c)
   _char->type = CHAR;
   _char->data._char.val = c;
   return _char;
+}
+
+
+Obj *makestring(char *buffer, int len)
+{
+  Obj *string = allocobj();
+  string->type = STRING;
+  string->data.string.val = malloc(len);
+  strncpy(string->data.string.val, buffer, len);
+  return string;
 }
 
 #define TOBOOLEAN(x) x ? thetrue : thefalse
@@ -473,6 +486,7 @@ Obj *read()
 {
 #define BUFFER_LEN 1024
   char readbuffer[BUFFER_LEN];
+  int i = 0;
 
   long l;
   if (scanf("%ld", &l)) /* skips whitespace */
@@ -513,13 +527,30 @@ Obj *read()
     default:
       ERROR("# not followed by t, f, or \\\n");
     }
+  case '"':
+    while ((c = getchar()) != '"') {
+      if (c == '\\')
+	switch (getchar()) {
+	case 'n':
+	  readbuffer[i++] = '\n';
+	  break;
+	case '"':
+	  readbuffer[i++] = '"';
+	  break;
+	default:
+	  ERROR("unrecognized escape sequence\n");
+	}
+      else
+	readbuffer[i++] = c;
+    }
+    readbuffer[i++] = '\0';
+    return makestring(readbuffer, i);
   default:
     ungetc(c, stdin);
-    int i;
-    for (i = 0; !isdelimiter(c = getchar()); readbuffer[i++] = c);
+    for (; !isdelimiter(c = getchar()); readbuffer[i++] = c);
     ungetc(c, stdin);
-    readbuffer[i] = '\0';
-    return makesymbol(readbuffer, i+1);
+    readbuffer[i++] = '\0';
+    return makesymbol(readbuffer, i);
   }
 
   ERROR("invalid input\n");
@@ -610,6 +641,7 @@ Obj *eval(Obj *o, Obj *env)
   case NUMBER:
   case BOOLEAN:
   case CHAR:
+  case STRING:
     return o;
   case SYMBOL:
     return cdr(envlookup(o, env));
@@ -733,6 +765,21 @@ void print(Obj *o)
     default:
       printf("#\\%c", o->data._char.val);
     }
+    break;
+  case STRING:
+    printf("\"");
+    for (char *str = o->data.string.val; *str != '\0'; str++)
+      switch(*str) {
+      case '"':
+	printf("\\\"");
+	break;
+      case '\n':
+	printf("\\n");
+	break;
+      default:
+	printf("%c", *str);
+      }
+    printf("\"");
     break;
   case SYMBOL:
     printf("%s", o->data.symbol.name);

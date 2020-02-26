@@ -12,7 +12,7 @@ jmp_buf errbuf;
     longjmp(errbuf, 1);				\
   } while (0);
 
-typedef enum { NUMBER, SYMBOL, PAIR, _NULL, BOOLEAN, PRIM_PROC, COMP_PROC } Type;
+typedef enum { NUMBER, BOOLEAN, CHAR, SYMBOL, PAIR, _NULL, PRIM_PROC, COMP_PROC } Type;
 
 typedef struct sObj {
   Type type;
@@ -23,6 +23,9 @@ typedef struct sObj {
     struct {
       int val;
     } boolean;
+    struct {
+      char val;
+    } _char;
     struct {
       char *name;
     } symbol;
@@ -89,6 +92,14 @@ Obj *makeboolean(int x)
   boolean->type = BOOLEAN;
   boolean->data.boolean.val = x;
   return boolean;
+}
+
+Obj *makechar(char c)
+{
+  Obj *_char = allocobj();
+  _char->type = CHAR;
+  _char->data._char.val = c;
+  return _char;
 }
 
 #define TOBOOLEAN(x) x ? thetrue : thefalse
@@ -248,11 +259,12 @@ FIXNUM_TRUE_FOR_PAIRS(fixnumle, "<=", <=);
     return TOBOOLEAN(car(args)->type == _type);	\
   }
 
-TYPE_PREDICATE(null, _NULL);
-TYPE_PREDICATE(boolean, BOOLEAN);
-TYPE_PREDICATE(symbol, SYMBOL);
 TYPE_PREDICATE(number, NUMBER);
+TYPE_PREDICATE(boolean, BOOLEAN);
+TYPE_PREDICATE(char, CHAR);
+TYPE_PREDICATE(symbol, SYMBOL);
 TYPE_PREDICATE(pair, PAIR);
+TYPE_PREDICATE(null, _NULL);
 
 Obj *procedurep(Obj *args)
 {
@@ -330,11 +342,12 @@ Obj *initenv()
 {
   Obj *env = thenull;
 
-  MAKE_PRIM_PROC(env, null?, nullp);
-  MAKE_PRIM_PROC(env, boolean?, booleanp);
-  MAKE_PRIM_PROC(env, symbol?, symbolp);
   MAKE_PRIM_PROC(env, number?, numberp);
+  MAKE_PRIM_PROC(env, boolean?, booleanp);
+  MAKE_PRIM_PROC(env, char?, charp);
+  MAKE_PRIM_PROC(env, symbol?, symbolp);
   MAKE_PRIM_PROC(env, pair?, pairp);
+  MAKE_PRIM_PROC(env, null?, nullp);
   MAKE_PRIM_PROC(env, procedure?, procedurep);
 
   MAKE_PRIM_PROC(env, +, add);
@@ -443,6 +456,19 @@ Obj *readpair()
   return pair;
 }
 
+void eat(char *str)
+{
+  for (int i = 0; str[i] != '\0'; ++i)
+    if (getchar() != str[i])
+      ERROR("unexpected character\n");
+}
+
+void assertnextdelim()
+{
+  if (!isdelimiter(peek()))
+    ERROR("expected delimiter\n");
+}
+
 Obj *read()
 {
 #define BUFFER_LEN 1024
@@ -466,8 +492,26 @@ Obj *read()
       return thetrue;
     case 'f':
       return thefalse;
+    case '\\':
+      c = getchar();
+      switch(c) {
+      case 's':
+	if (peek() == 'p') {
+	  eat("pace");
+	  assertnextdelim();
+	  return makechar(' ');
+	}
+      case 'n':
+	if (peek() == 'e') {
+	  eat("ewline");
+	  assertnextdelim();
+	  return makechar('\n');
+	}
+      default:
+	return makechar(c);
+      }
     default:
-      ERROR("# not followed by t or f\n");
+      ERROR("# not followed by t, f, or \\\n");
     }
   default:
     ungetc(c, stdin);
@@ -565,6 +609,7 @@ Obj *eval(Obj *o, Obj *env)
   switch (o->type) {
   case NUMBER:
   case BOOLEAN:
+  case CHAR:
     return o;
   case SYMBOL:
     return cdr(envlookup(o, env));
@@ -676,6 +721,18 @@ void print(Obj *o)
     break;
   case BOOLEAN:
     printf("#%c", istrue(o) ? 't' : 'f');
+    break;
+  case CHAR:
+    switch (o->data._char.val) {
+    case '\n':
+      printf("#\\newline");
+      break;
+    case ' ':
+      printf("#\\space");
+      break;
+    default:
+      printf("#\\%c", o->data._char.val);
+    }
     break;
   case SYMBOL:
     printf("%s", o->data.symbol.name);

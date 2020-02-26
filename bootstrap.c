@@ -539,6 +539,9 @@ Obj *read()
 	case '"':
 	  readbuffer[i++] = '"';
 	  break;
+	case '\\':
+	  readbuffer[i++] = '\\';
+	  break;
 	default:
 	  ERROR("unrecognized escape sequence\n");
 	}
@@ -777,6 +780,9 @@ void print(Obj *o)
 	break;
       case '\n':
 	printf("\\n");
+	break;
+      case '\\':
+	printf("\\\\");
 	break;
       default:
 	printf("%c", *str);

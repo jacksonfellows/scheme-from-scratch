@@ -831,6 +831,7 @@ int main()
 {
   init();
   Obj *env = cons(globalenv, thenull);
+  setjmp(errbuf); /* should this be inside the while (1)? */
   while (1) {
     setjmp(errbuf); /* should this be inside the while (1)? */
     printf("> ");

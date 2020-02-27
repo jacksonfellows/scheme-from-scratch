@@ -370,6 +370,20 @@ Obj *readproc(Obj *args)
   return o == NULL ? theeof : o;
 }
 
+Obj *readcharproc(Obj *args)
+{
+  int c = getchar();
+  return c == EOF ? theeof : makechar(c);
+}
+
+int peek();
+
+Obj *peekcharproc(Obj *args)
+{
+  int c = peek();
+  return c == EOF ? theeof : makechar(c);
+}
+
 void write(Obj *o);
 
 Obj *writeproc(Obj *args)
@@ -426,6 +440,8 @@ Obj *initenv()
   MAKE_PRIM_PROC(env, environment, makeenv);
 
   MAKE_PRIM_PROC(env, read, readproc);
+  MAKE_PRIM_PROC(env, read-char, readcharproc);
+  MAKE_PRIM_PROC(env, peek-char, peekcharproc);
 
   MAKE_PRIM_PROC(env, write, writeproc);
 

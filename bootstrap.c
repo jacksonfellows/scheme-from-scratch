@@ -12,7 +12,7 @@ jmp_buf errbuf;
     longjmp(errbuf, 1);				\
   } while (0);
 
-typedef enum { NUMBER, BOOLEAN, CHAR, STRING, SYMBOL, PAIR, _NULL, PRIM_PROC, COMP_PROC } Type;
+typedef enum { NUMBER, BOOLEAN, CHAR, STRING, SYMBOL, PAIR, _NULL, PRIM_PROC, COMP_PROC, _EOF } Type;
 
 typedef struct sObj {
   Type type;
@@ -58,6 +58,8 @@ DECLARE_CONSTANT(null);
 
 DECLARE_CONSTANT(true);
 DECLARE_CONSTANT(false);
+
+DECLARE_CONSTANT(eof);
 
 DECLARE_CONSTANT(quote);
 DECLARE_CONSTANT(define);
@@ -215,6 +217,13 @@ Obj *makecompproc(Obj *formals, Obj *body, Obj *env)
   return compproc;
 }
 
+Obj *makeeof()
+{
+  Obj *eof = allocobj();
+  eof->type = _EOF;
+  return eof;
+}
+
 int length(Obj *pair)
 {
   int len = 0;
@@ -279,6 +288,7 @@ TYPE_PREDICATE(string, STRING);
 TYPE_PREDICATE(symbol, SYMBOL);
 TYPE_PREDICATE(pair, PAIR);
 TYPE_PREDICATE(null, _NULL);
+TYPE_PREDICATE(eof, _EOF);
 
 Obj *procedurep(Obj *args)
 {
@@ -356,7 +366,8 @@ Obj *read();
 
 Obj *readproc(Obj *args)
 {
-  return read();
+  Obj *o = read();
+  return o == NULL ? theeof : o;
 }
 
 void write(Obj *o);
@@ -365,6 +376,11 @@ Obj *writeproc(Obj *args)
 {
   write(car(args));
   return theok;
+}
+
+Obj *eofobject(Obj *args)
+{
+  return theeof;
 }
 
 Obj *initenv()
@@ -379,6 +395,7 @@ Obj *initenv()
   MAKE_PRIM_PROC(env, pair?, pairp);
   MAKE_PRIM_PROC(env, null?, nullp);
   MAKE_PRIM_PROC(env, procedure?, procedurep);
+  MAKE_PRIM_PROC(env, eof-object?, eofp);
 
   MAKE_PRIM_PROC(env, +, add);
   MAKE_PRIM_PROC(env, -, sub);
@@ -412,6 +429,8 @@ Obj *initenv()
 
   MAKE_PRIM_PROC(env, write, writeproc);
 
+  MAKE_PRIM_PROC(env, eof-object, eofobject);
+
   return env;
 }
 
@@ -422,6 +441,8 @@ void init()
 
   thetrue = makeboolean(1);
   thefalse = makeboolean(0);
+
+  theeof = makeeof();
 
   interned = thenull;
   globalenv = thenull;
@@ -506,13 +527,19 @@ Obj *read()
 #define BUFFER_LEN 1024
   char readbuffer[BUFFER_LEN];
   int i = 0;
-
   long l;
-  if (scanf("%ld", &l)) /* skips whitespace */
-    return makefixnum(l);
+
+  skipwhitespace();
 
   int c = getchar();
   switch (c) {
+  case EOF:
+    ungetc(' ', stdin); /* hack to remove EOF */
+    return NULL;
+  case '-': case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9':
+    ungetc(c, stdin);
+    scanf("%ld", &l);
+    return makefixnum(l);
   case '(':
     return readpair();
   case ')':
@@ -664,6 +691,7 @@ Obj *eval(Obj *o, Obj *env)
   case BOOLEAN:
   case CHAR:
   case STRING:
+  case _EOF:
     return o;
   case SYMBOL:
     return cdr(envlookup(o, env));
@@ -824,6 +852,9 @@ void write(Obj *o)
   case COMP_PROC:
     printf("#<procedure>");
     break;
+  case _EOF:
+    printf("#<eof>");
+    break;
   }
 }
 
@@ -831,11 +862,14 @@ int main()
 {
   init();
   Obj *env = cons(globalenv, thenull);
+  Obj *o;
   setjmp(errbuf); /* should this be inside the while (1)? */
   while (1) {
-    setjmp(errbuf); /* should this be inside the while (1)? */
     printf("> ");
-    write(eval(read(), env));
+    o = read();
+    if (o == NULL)
+      break;
+    write(eval(o, env));
     printf("\n");
   }
   return 0;

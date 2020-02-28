@@ -606,21 +606,21 @@ Obj *read(FILE *in)
   skipwhitespace(in);
 
   int c = getc(in);
-  switch (c) {
-  case EOF:
+
+  if (c == EOF) {
     ungetc(' ', in); /* hack to remove EOF */
     return NULL;
-  case '-': case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9':
+  } else if (isdigit(c) || (c == '-' && isdigit(peek(in)))) {
     ungetc(c, in);
     fscanf(in, "%ld", &l);
     return makefixnum(l);
-  case '(':
+  } else if (c == '(')
     return readpair(in);
-  case ')':
+  else if (c == ')') {
     ERROR("unbalanced parenthesis\n");
-  case '\'':
+  } else if (c == '\'') {
     return cons(thequote, cons(read(in), thenull));
-  case '#':
+  } else if (c == '#') {
     switch (getc(in)) {
     case 't':
       return thetrue;
@@ -647,7 +647,7 @@ Obj *read(FILE *in)
     default:
       ERROR("# not followed by t, f, or \\\n");
     }
-  case '"':
+  } else if (c == '"') {
     while ((c = getc(in)) != '"') {
       if (c == '\\')
 	switch (getc(in)) {
@@ -668,15 +668,13 @@ Obj *read(FILE *in)
     }
     readbuffer[i++] = '\0';
     return makestring(readbuffer, i);
-  default:
-    ungetc(c, in);
-    for (; !isdelimiter(c = getc(in)); readbuffer[i++] = c);
-    ungetc(c, in);
-    readbuffer[i++] = '\0';
-    return makesymbol(readbuffer, i);
   }
 
-  ERROR("invalid input\n");
+  ungetc(c, in);
+  for (; !isdelimiter(c = getc(in)); readbuffer[i++] = c);
+  ungetc(c, in);
+  readbuffer[i++] = '\0';
+  return makesymbol(readbuffer, i);
 }
 
 Obj *makealist(Obj *a, Obj *b)

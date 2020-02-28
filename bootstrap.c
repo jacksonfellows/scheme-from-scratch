@@ -12,7 +12,7 @@ jmp_buf errbuf;
     longjmp(errbuf, 1);				\
   } while (0);
 
-typedef enum { NUMBER, BOOLEAN, CHAR, STRING, SYMBOL, PAIR, _NULL, PRIM_PROC, COMP_PROC, _EOF } Type;
+typedef enum { NUMBER, BOOLEAN, CHAR, STRING, SYMBOL, PAIR, _NULL, PRIM_PROC, COMP_PROC, _EOF, INPUT_PORT } Type;
 
 typedef struct sObj {
   Type type;
@@ -44,6 +44,9 @@ typedef struct sObj {
       struct sObj *body;
       struct sObj *env;
     } compproc;
+    struct {
+      FILE *in;
+    } inputport;
   } data;
 } Obj;
 
@@ -224,6 +227,14 @@ Obj *makeeof()
   return eof;
 }
 
+Obj *makeinputport(FILE* in)
+{
+    Obj *inputport = allocobj();
+    inputport->type = INPUT_PORT;
+    inputport->data.inputport.in = in;
+    return inputport;
+}
+
 int length(Obj *pair)
 {
   int len = 0;
@@ -289,6 +300,7 @@ TYPE_PREDICATE(symbol, SYMBOL);
 TYPE_PREDICATE(pair, PAIR);
 TYPE_PREDICATE(null, _NULL);
 TYPE_PREDICATE(eof, _EOF);
+TYPE_PREDICATE(inputport, INPUT_PORT);
 
 Obj *procedurep(Obj *args)
 {
@@ -363,26 +375,39 @@ Obj *makeenv(Obj *args)
   return env;
 }
 
-Obj *read();
+Obj *read(FILE *in);
+
+#define GET_IN_PORT(args) isnull(args) ? stdin : car(args)->data.inputport.in
 
 Obj *readproc(Obj *args)
 {
-  Obj *o = read();
+  Obj *o = read(GET_IN_PORT(args));
   return o == NULL ? theeof : o;
 }
 
 Obj *readcharproc(Obj *args)
 {
-  int c = getchar();
+  int c = getc(GET_IN_PORT(args));
   return c == EOF ? theeof : makechar(c);
 }
 
-int peek();
+int peek(FILE *in);
 
 Obj *peekcharproc(Obj *args)
 {
-  int c = peek();
+  int c = peek(GET_IN_PORT(args));
   return c == EOF ? theeof : makechar(c);
+}
+
+Obj *openinputfile(Obj *args)
+{
+  return makeinputport(fopen(car(args)->data.string.val, "r"));
+}
+
+Obj *closeinputport(Obj *args)
+{
+  fclose(car(args)->data.inputport.in);
+  return theok;
 }
 
 void write(Obj *o);
@@ -411,6 +436,7 @@ Obj *initenv()
   MAKE_PRIM_PROC(env, null?, nullp);
   MAKE_PRIM_PROC(env, procedure?, procedurep);
   MAKE_PRIM_PROC(env, eof-object?, eofp);
+  MAKE_PRIM_PROC(env, input-port?, inputportp);
 
   MAKE_PRIM_PROC(env, +, add);
   MAKE_PRIM_PROC(env, -, sub);
@@ -443,6 +469,8 @@ Obj *initenv()
   MAKE_PRIM_PROC(env, read, readproc);
   MAKE_PRIM_PROC(env, read-char, readcharproc);
   MAKE_PRIM_PROC(env, peek-char, peekcharproc);
+  MAKE_PRIM_PROC(env, open-input-file, openinputfile);
+  MAKE_PRIM_PROC(env, close-input-port, closeinputport);
 
   MAKE_PRIM_PROC(env, write, writeproc);
 
@@ -483,10 +511,10 @@ void init()
   predefinedenv = initenv();
 }
 
-int peek()
+int peek(FILE *in)
 {
-  int c = getchar();
-  ungetc(c, stdin);
+  int c = getc(in);
+  ungetc(c, in);
   return c;
 }
 
@@ -495,93 +523,93 @@ int isdelimiter(int c)
   return isspace(c) || c == '(' || c == ')';
 }
 
-void skipwhitespace()
+void skipwhitespace(FILE *in)
 {
   int c;
-  while (isspace(c = getchar()));
-  ungetc(c, stdin);
+  while (isspace(c = getc(in)));
+  ungetc(c, in);
 }
 
-Obj *readpair()
+Obj *readpair(FILE *in)
 {
-  skipwhitespace();
-  if (peek() == ')') {
-    getchar();
+  skipwhitespace(in);
+  if (peek(in) == ')') {
+    getc(in);
     return thenull;
   }
 
   Obj *pair = allocobj();
   pair->type = PAIR;
-  setcar(pair, read());
+  setcar(pair, read(in));
 
-  skipwhitespace();
-  if (peek() == '.') {
-    getchar();
-    setcdr(pair, read());
-    skipwhitespace();
-    if (getchar() != ')')
+  skipwhitespace(in);
+  if (peek(in) == '.') {
+    getc(in);
+    setcdr(pair, read(in));
+    skipwhitespace(in);
+    if (getc(in) != ')')
       ERROR("invalid use of .\n");
   } else
-    setcdr(pair, readpair());
+    setcdr(pair, readpair(in));
   return pair;
 }
 
-void eat(char *str)
+void eat(FILE *in, char *str)
 {
   for (int i = 0; str[i] != '\0'; ++i)
-    if (getchar() != str[i])
+    if (getc(in) != str[i])
       ERROR("unexpected character\n");
 }
 
-void assertnextdelim()
+void assertnextdelim(FILE *in)
 {
-  if (!isdelimiter(peek()))
+  if (!isdelimiter(peek(in)))
     ERROR("expected delimiter\n");
 }
 
-Obj *read()
+Obj *read(FILE *in)
 {
 #define BUFFER_LEN 1024
   char readbuffer[BUFFER_LEN];
   int i = 0;
   long l;
 
-  skipwhitespace();
+  skipwhitespace(in);
 
-  int c = getchar();
+  int c = getc(in);
   switch (c) {
   case EOF:
-    ungetc(' ', stdin); /* hack to remove EOF */
+    ungetc(' ', in); /* hack to remove EOF */
     return NULL;
   case '-': case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9':
-    ungetc(c, stdin);
-    scanf("%ld", &l);
+    ungetc(c, in);
+    fscanf(in, "%ld", &l);
     return makefixnum(l);
   case '(':
-    return readpair();
+    return readpair(in);
   case ')':
     ERROR("unbalanced parenthesis\n");
   case '\'':
-    return cons(thequote, cons(read(), thenull));
+    return cons(thequote, cons(read(in), thenull));
   case '#':
-    switch (getchar()) {
+    switch (getc(in)) {
     case 't':
       return thetrue;
     case 'f':
       return thefalse;
     case '\\':
-      c = getchar();
+      c = getc(in);
       switch(c) {
       case 's':
-	if (peek() == 'p') {
-	  eat("pace");
-	  assertnextdelim();
+	if (peek(in) == 'p') {
+	  eat(in, "pace");
+	  assertnextdelim(in);
 	  return makechar(' ');
 	}
       case 'n':
-	if (peek() == 'e') {
-	  eat("ewline");
-	  assertnextdelim();
+	if (peek(in) == 'e') {
+	  eat(in, "ewline");
+	  assertnextdelim(in);
 	  return makechar('\n');
 	}
       default:
@@ -591,9 +619,9 @@ Obj *read()
       ERROR("# not followed by t, f, or \\\n");
     }
   case '"':
-    while ((c = getchar()) != '"') {
+    while ((c = getc(in)) != '"') {
       if (c == '\\')
-	switch (getchar()) {
+	switch (getc(in)) {
 	case 'n':
 	  readbuffer[i++] = '\n';
 	  break;
@@ -612,9 +640,9 @@ Obj *read()
     readbuffer[i++] = '\0';
     return makestring(readbuffer, i);
   default:
-    ungetc(c, stdin);
-    for (; !isdelimiter(c = getchar()); readbuffer[i++] = c);
-    ungetc(c, stdin);
+    ungetc(c, in);
+    for (; !isdelimiter(c = getc(in)); readbuffer[i++] = c);
+    ungetc(c, in);
     readbuffer[i++] = '\0';
     return makesymbol(readbuffer, i);
   }
@@ -709,6 +737,7 @@ Obj *eval(Obj *o, Obj *env)
   case CHAR:
   case STRING:
   case _EOF:
+  case INPUT_PORT:
     return o;
   case SYMBOL:
     return cdr(envlookup(o, env));
@@ -872,6 +901,9 @@ void write(Obj *o)
   case _EOF:
     printf("#<eof>");
     break;
+  case INPUT_PORT:
+    printf("#<input-port>");
+    break;
   }
 }
 
@@ -883,7 +915,7 @@ int main()
   setjmp(errbuf); /* should this be inside the while (1)? */
   while (1) {
     printf("> ");
-    o = read();
+    o = read(stdin);
     if (o == NULL)
       break;
     write(eval(o, interactionenv));

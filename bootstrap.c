@@ -341,11 +341,12 @@ Obj *eq(Obj *args)
 #define INIT_CONSTANT_SYMBOL(name) the##name = MAKE_CONSTANT_SYMBOL(#name)
 #define MAKE_PRIM_PROC(env, name, proc) PUSH(cons(MAKE_CONSTANT_SYMBOL(#name), makeprimproc(proc)), env)
 
-Obj *globalenv;
+Obj *interactionenv;
+Obj *predefinedenv;
 
-Obj *interactionenv(Obj *args)
+Obj *interactionenvproc(Obj *args)
 {
-  return globalenv;
+  return interactionenv;
 }
 
 Obj *nullenv(Obj *args)
@@ -435,7 +436,7 @@ Obj *initenv()
   MAKE_PRIM_PROC(env, apply, NULL);
   MAKE_PRIM_PROC(env, eval, NULL);
 
-  MAKE_PRIM_PROC(env, interaction-environment, interactionenv);
+  MAKE_PRIM_PROC(env, interaction-environment, interactionenvproc);
   MAKE_PRIM_PROC(env, nullenv, nullenv);
   MAKE_PRIM_PROC(env, environment, makeenv);
 
@@ -461,7 +462,7 @@ void init()
   theeof = makeeof();
 
   interned = thenull;
-  globalenv = thenull;
+  predefinedenv = thenull;
 
   INIT_CONSTANT_SYMBOL(quote);
   INIT_CONSTANT_SYMBOL(define);
@@ -479,7 +480,7 @@ void init()
   INIT_CONSTANT_SYMBOL(apply);
   INIT_CONSTANT_SYMBOL(eval);
 
-  globalenv = initenv();
+  predefinedenv = initenv();
 }
 
 int peek()
@@ -877,7 +878,7 @@ void write(Obj *o)
 int main()
 {
   init();
-  Obj *env = cons(globalenv, thenull);
+  interactionenv = cons(predefinedenv, thenull);
   Obj *o;
   setjmp(errbuf); /* should this be inside the while (1)? */
   while (1) {
@@ -885,7 +886,7 @@ int main()
     o = read();
     if (o == NULL)
       break;
-    write(eval(o, env));
+    write(eval(o, interactionenv));
     printf("\n");
   }
   return 0;

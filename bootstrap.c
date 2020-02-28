@@ -443,6 +443,19 @@ Obj *closeport(Obj *args)
   return theok;
 }
 
+Obj *eval(Obj *o, Obj *env);
+
+Obj *load(Obj *args)
+{
+  FILE *in = fopen(car(args)->data.string.val, "r");
+  Obj *o;
+  Obj *res;
+  while ((o = read(in)) != NULL)
+    res = eval(o, interactionenv);
+  fclose(in);
+  return res;
+}
+
 Obj *eofobject(Obj *args)
 {
   return theeof;
@@ -491,6 +504,8 @@ Obj *initenv()
   MAKE_PRIM_PROC(env, interaction-environment, interactionenvproc);
   MAKE_PRIM_PROC(env, nullenv, nullenv);
   MAKE_PRIM_PROC(env, environment, makeenv);
+
+  MAKE_PRIM_PROC(env, load, load);
 
   MAKE_PRIM_PROC(env, read, readproc);
   MAKE_PRIM_PROC(env, read-char, readcharproc);
@@ -720,8 +735,6 @@ void define(Obj *sym, Obj *val, Obj *env)
     setcdr(o, cons(cons(sym, val), thenull));
   }
 }
-
-Obj *eval(Obj *o, Obj *env);
 
 Obj *evalall(Obj *list, Obj *env)
 {

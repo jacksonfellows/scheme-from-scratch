@@ -12,7 +12,7 @@ jmp_buf errbuf;
     longjmp(errbuf, 1);				\
   } while (0);
 
-typedef enum { NUMBER, BOOLEAN, CHAR, STRING, SYMBOL, PAIR, _NULL, PRIM_PROC, COMP_PROC, _EOF, INPUT_PORT } Type;
+typedef enum { NUMBER, BOOLEAN, CHAR, STRING, SYMBOL, PAIR, _NULL, PRIM_PROC, COMP_PROC, _EOF, INPUT_PORT, OUTPUT_PORT } Type;
 
 typedef struct sObj {
   Type type;
@@ -47,6 +47,9 @@ typedef struct sObj {
     struct {
       FILE *in;
     } inputport;
+    struct {
+      FILE *out;
+    } outputport;
   } data;
 } Obj;
 
@@ -235,6 +238,14 @@ Obj *makeinputport(FILE* in)
     return inputport;
 }
 
+Obj *makeoutputport(FILE* out)
+{
+    Obj *outputport = allocobj();
+    outputport->type = OUTPUT_PORT;
+    outputport->data.outputport.out = out;
+    return outputport;
+}
+
 int length(Obj *pair)
 {
   int len = 0;
@@ -301,6 +312,7 @@ TYPE_PREDICATE(pair, PAIR);
 TYPE_PREDICATE(null, _NULL);
 TYPE_PREDICATE(eof, _EOF);
 TYPE_PREDICATE(inputport, INPUT_PORT);
+TYPE_PREDICATE(outputport, OUTPUT_PORT);
 
 Obj *procedurep(Obj *args)
 {
@@ -404,17 +416,30 @@ Obj *openinputfile(Obj *args)
   return makeinputport(fopen(car(args)->data.string.val, "r"));
 }
 
-Obj *closeinputport(Obj *args)
-{
-  fclose(car(args)->data.inputport.in);
-  return theok;
-}
+void write(FILE *out, Obj *o);
 
-void write(Obj *o);
+#define GET_OUT_PORT(args) isnull(args) ? stdout : car(args)->data.outputport.out
 
 Obj *writeproc(Obj *args)
 {
-  write(car(args));
+  write(GET_OUT_PORT(cdr(args)), car(args));
+  return theok;
+}
+
+Obj *writecharproc(Obj *args)
+{
+  putc(car(args)->data._char.val, GET_OUT_PORT(cdr(args)));
+  return theok;
+}
+
+Obj *openoutputfile(Obj *args)
+{
+  return makeoutputport(fopen(car(args)->data.string.val, "w"));
+}
+
+Obj *closeport(Obj *args)
+{
+  fclose(car(args)->data.inputport.in); /* union hacking */
   return theok;
 }
 
@@ -437,6 +462,7 @@ Obj *initenv()
   MAKE_PRIM_PROC(env, procedure?, procedurep);
   MAKE_PRIM_PROC(env, eof-object?, eofp);
   MAKE_PRIM_PROC(env, input-port?, inputportp);
+  MAKE_PRIM_PROC(env, output-port?, outputportp);
 
   MAKE_PRIM_PROC(env, +, add);
   MAKE_PRIM_PROC(env, -, sub);
@@ -470,9 +496,12 @@ Obj *initenv()
   MAKE_PRIM_PROC(env, read-char, readcharproc);
   MAKE_PRIM_PROC(env, peek-char, peekcharproc);
   MAKE_PRIM_PROC(env, open-input-file, openinputfile);
-  MAKE_PRIM_PROC(env, close-input-port, closeinputport);
 
   MAKE_PRIM_PROC(env, write, writeproc);
+  MAKE_PRIM_PROC(env, write-char, writecharproc);
+  MAKE_PRIM_PROC(env, open-output-file, openoutputfile);
+
+  MAKE_PRIM_PROC(env, close-port, closeport);
 
   MAKE_PRIM_PROC(env, eof-object, eofobject);
 
@@ -825,84 +854,87 @@ Obj *eval(Obj *o, Obj *env)
   }
 }
 
-void writepair(Obj *o)
+void writepair(FILE *out, Obj *o)
 {
-  write(car(o));
+  write(out, car(o));
 
   if (isnull(cdr(o)));
   else if (cdr(o)->type == PAIR) {
-    printf(" ");
-    writepair(cdr(o));
+    fprintf(out, " ");
+    writepair(out, cdr(o));
   } else {
-    printf(" . ");
-    write(cdr(o));
+    fprintf(out, " . ");
+    write(out, cdr(o));
   }
 }
 
-void write(Obj *o)
+void write(FILE *out, Obj *o)
 {
   switch (o->type) {
   case NUMBER:
-    printf("%ld", o->data.fixnum.val);
+    fprintf(out, "%ld", o->data.fixnum.val);
     break;
   case BOOLEAN:
-    printf("#%c", istrue(o) ? 't' : 'f');
+    fprintf(out, "#%c", istrue(o) ? 't' : 'f');
     break;
   case CHAR:
     switch (o->data._char.val) {
     case '\n':
-      printf("#\\newline");
+      fprintf(out, "#\\newline");
       break;
     case ' ':
-      printf("#\\space");
+      fprintf(out, "#\\space");
       break;
     default:
-      printf("#\\%c", o->data._char.val);
+      fprintf(out, "#\\%c", o->data._char.val);
     }
     break;
   case STRING:
-    printf("\"");
+    fprintf(out, "\"");
     for (char *str = o->data.string.val; *str != '\0'; str++)
       switch(*str) {
       case '"':
-	printf("\\\"");
+	fprintf(out, "\\\"");
 	break;
       case '\n':
-	printf("\\n");
+	fprintf(out, "\\n");
 	break;
       case '\\':
-	printf("\\\\");
+	fprintf(out, "\\\\");
 	break;
       default:
-	printf("%c", *str);
+	fprintf(out, "%c", *str);
       }
-    printf("\"");
+    fprintf(out, "\"");
     break;
   case SYMBOL:
-    printf("%s", o->data.symbol.name);
+    fprintf(out, "%s", o->data.symbol.name);
     break;
   case _NULL:
-    printf("()");
+    fprintf(out, "()");
     break;
   case PAIR:
     if (isquote(car(o))) {
-      printf("'");
-      write(cadr(o));
+      fprintf(out, "'");
+      write(out, cadr(o));
     } else {
-      printf("(");
-      writepair(o);
-      printf(")");
+      fprintf(out, "(");
+      writepair(out, o);
+      fprintf(out, ")");
     }
     break;
   case PRIM_PROC:
   case COMP_PROC:
-    printf("#<procedure>");
+    fprintf(out, "#<procedure>");
     break;
   case _EOF:
-    printf("#<eof>");
+    fprintf(out, "#<eof>");
     break;
   case INPUT_PORT:
-    printf("#<input-port>");
+    fprintf(out, "#<input-port>");
+    break;
+  case OUTPUT_PORT:
+    fprintf(out, "#<output-port>");
     break;
   }
 }
@@ -918,7 +950,7 @@ int main()
     o = read(stdin);
     if (o == NULL)
       break;
-    write(eval(o, interactionenv));
+    write(stdout, eval(o, interactionenv));
     printf("\n");
   }
   return 0;

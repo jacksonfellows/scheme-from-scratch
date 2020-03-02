@@ -570,8 +570,16 @@ int isdelimiter(int c)
 void skipwhitespace(FILE *in)
 {
   int c;
-  while (isspace(c = getc(in)));
-  ungetc(c, in);
+  while ((c = getc(in)) != EOF) {
+    if (isspace(c))
+      continue;
+    if (c == ';') {
+      while ((c = getc(in)) != '\n');
+      continue;
+    }
+    ungetc(c, in);
+    break;
+  }
 }
 
 Obj *readpair(FILE *in)
@@ -715,7 +723,9 @@ Obj *envlookup(Obj *sym, Obj *env)
     if (!isnull(binding))
       return binding;
   }
-  ERROR("unbound variable\n");
+  fprintf(stderr, "unbound variable: ");
+  write(stderr, sym);
+  ERROR("\n");
 }
 
 void define(Obj *sym, Obj *val, Obj *env)

@@ -281,6 +281,11 @@ Obj *mul(Obj *args)
   return makefixnum(product);
 }
 
+Obj *lsh(Obj *args)
+{
+  return makefixnum(car(args)->data.fixnum.val << cadr(args)->data.fixnum.val);
+}
+
 #define FIXNUM_TRUE_FOR_PAIRS(procname, name, op)			\
   Obj* procname(Obj *args)						\
   {									\
@@ -443,6 +448,19 @@ Obj *closeport(Obj *args)
   return theok;
 }
 
+Obj *display(Obj *args)
+{
+  FILE* out = GET_OUT_PORT(cdr(args));
+  switch (car(args)->type) {
+  case STRING:
+    fprintf(out, "%s", car(args)->data.string.val);
+    break;
+  default:
+    write(out, car(args));
+  }
+  return theok;
+}
+
 Obj *eval(Obj *o, Obj *env);
 
 Obj *load(Obj *args)
@@ -481,6 +499,8 @@ Obj *initenv()
   MAKE_PRIM_PROC(env, -, sub);
   MAKE_PRIM_PROC(env, *, mul);
 
+  MAKE_PRIM_PROC(env, lsh, lsh);
+
   MAKE_PRIM_PROC(env, =, fixnumeq);
   MAKE_PRIM_PROC(env, <, fixnumlt);
   MAKE_PRIM_PROC(env, <=, fixnumle);
@@ -517,6 +537,8 @@ Obj *initenv()
   MAKE_PRIM_PROC(env, open-output-file, openoutputfile);
 
   MAKE_PRIM_PROC(env, close-port, closeport);
+
+  MAKE_PRIM_PROC(env, display, display);
 
   MAKE_PRIM_PROC(env, eof-object, eofobject);
 
@@ -960,19 +982,22 @@ void write(FILE *out, Obj *o)
   }
 }
 
-int main()
+int main(int argc, char *argv[])
 {
   init();
   interactionenv = cons(predefinedenv, thenull);
-  Obj *o;
-  setjmp(errbuf); /* should this be inside the while (1)? */
-  while (1) {
-    printf("> ");
-    o = read(stdin);
-    if (o == NULL)
-      break;
-    write(stdout, eval(o, interactionenv));
-    printf("\n");
-  }
+  if (argc == 1) {
+    Obj *o;
+    setjmp(errbuf); /* should this be inside the while (1)? */
+    while (1) {
+      printf("> ");
+      o = read(stdin);
+      if (o == NULL)
+	break;
+      write(stdout, eval(o, interactionenv));
+      printf("\n");
+    }
+  } else
+    load(cons(makestring(argv[1], strlen(argv[1])), thenull));
   return 0;
 }

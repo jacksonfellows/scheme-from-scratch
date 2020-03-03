@@ -1,6 +1,6 @@
 (load "stdlib.scm")
 
-(define nshift 2)
+(define fxshift 2)
 (define t 111) ;; 0x6F, 0b01101111
 (define f 47) ;; 0x2F, 0b00101111
 (define cshift 8)
@@ -12,20 +12,64 @@
   (display x)
   (newline))
 
+(define (imm? x)
+  (or (number? x) (boolean? x) (char? x) (null? x)))
+
+(define (primcall? x)
+  (and (pair? x) (symbol? (car x))))
+
+(define (imm-rep x)
+  (cond
+   ((number? x) (lsh x fxshift))
+   ((boolean? x) (if x t f))
+   ((char? x) (+ ctag (lsh x cshift)))
+   ((null? x) null)
+   ))
+
+(define (emit-wrapped thunk)
+  (emit "(")
+  (thunk)
+  (emit ")"))
+
+(define (emit-wrapped-expr x)
+  (emit-wrapped (lambda () (emit-expr x))))
+
+(define primcalls
+  (list (cons 'fxadd1 (lambda (args)
+			(emit-wrapped-expr (car args))
+			(emit "+")
+			(emit (imm-rep 1))))
+	(cons 'fxsub1 (lambda (args)
+			(emit-wrapped-expr (car args))
+			(emit "-")
+			(emit (imm-rep 1))))
+	(cons 'char->fixnum (lambda (args)
+			      (emit-wrapped-expr (car args))
+			      (emit ">>")
+			      (emit (- cshift fxshift))))
+	(cons 'fixnum->char (lambda (args)
+			      (emit-wrapped (lambda ()
+					      (emit-wrapped-expr (car args))
+					      (emit "<<")
+					      (emit (- cshift fxshift))))
+			      (emit "+")
+			      (emit ctag)))))
+
+(define (emit-primcall x)
+  ((cdr (assq (car x) primcalls)) (cdr x)))
+
 (define (emit-expr x)
   (cond
-   ((number? x) (emit (lsh x nshift)))
-   ((boolean? x) (emit (if x t f)))
-   ((char? x) (emit (+ ctag (lsh x cshift))))
-   ((null? x) (emit null))
+   ((imm? x) (emit (imm-rep x)))
+   ((primcall? x) (emit-primcall x))
    ))
 
 (define (emit-program x)
   (emitln "#include <stdio.h>
 
-#define nshift 2
-#define nmask 0x03
-#define ntag 0x00
+#define fxshift 2
+#define fxmask 0x03
+#define fxtag 0x00
 
 #define t 0x6F
 #define f 0x2F
@@ -45,8 +89,8 @@ scm scheme()
   (emitln "
 void print_scheme(scm scheme_val)
 {
-if ((scheme_val & nmask) == ntag)
-printf(\"%d\", (int)(scheme_val >> nshift));
+if ((scheme_val & fxmask) == fxtag)
+printf(\"%d\", (int)scheme_val >> fxshift);
 else if (scheme_val == t)
 printf(\"#t\");
 else if (scheme_val == f)
@@ -66,4 +110,4 @@ print_scheme(scheme());
 return 0;
 }"))
 
-(emit-program '())
+(emit-program '(fixnum->char (fxadd1 (char->fixnum #\A))))

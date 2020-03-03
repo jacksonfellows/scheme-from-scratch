@@ -890,7 +890,9 @@ Obj *eval(Obj *o, Obj *env)
       o = car(o);
       goto tailcall;
     default:
-      ERROR("not a procedure\n");
+      fprintf(stderr, "not a procedure: ");
+      write(stderr, proc);
+      ERROR("\n");
     }
   default:
     ERROR("cannot eval object\n");

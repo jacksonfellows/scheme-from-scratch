@@ -56,6 +56,7 @@
 
 (make-unary-primcall 'null? (lambda (x) (to-bool (binop x '== (cc null)))))
 (make-unary-primcall 'not (lambda (x) (to-bool (binop x '== (cc f)))))
+(make-unary-primcall 'fxzero? (lambda (x) (to-bool (binop x '== 0))))
 
 (define (tagged? mask tag) (lambda (x) (to-bool (binop (cc (binop x '& (cc mask)))
 						       '==
@@ -146,4 +147,4 @@ print_scheme(scheme());
 return 0;
 }"))
 
-(emit-program '(if #f 1 2))
+(emit-program '(if (fxzero? 1000) #\a #\b))

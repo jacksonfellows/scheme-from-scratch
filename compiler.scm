@@ -51,6 +51,10 @@
 							  '==
 							  (cc fxtag)))))
 
+(make-unary-primcall 'null? (lambda (x) (to-bool (binop x '== (cc null)))))
+
+(make-unary-primcall 'not (lambda (x) (to-bool (binop x '== (cc f)))))
+
 (define (compile-primcall x)
   (let ((primcall-compiler (assq-ref (car x) *primcalls*)))
     (if primcall-compiler
@@ -121,4 +125,4 @@ print_scheme(scheme());
 return 0;
 }"))
 
-(emit-program '(fixnum? (fxadd1 (char->fixnum #\a))))
+(emit-program '(not (null? ())))

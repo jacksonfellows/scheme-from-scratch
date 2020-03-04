@@ -1,68 +1,79 @@
 (load "stdlib.scm")
 
 (define fxshift 2)
+(define fxmask 3) ;; 0x03, 0b00000011
+(define fxtag 0)
 (define t 111) ;; 0x6F, 0b01101111
 (define f 47) ;; 0x2F, 0b00101111
 (define cshift 8)
 (define ctag 15) ;; 0x0F, 0b00001111
 (define null 63) ;; 0x3F, 0b00111111
 
-(define emit display)
-(define (emitln x)
-  (display x)
-  (newline))
-
 (define (imm? x)
   (or (number? x) (boolean? x) (char? x) (null? x)))
 
-(define (primcall? x)
-  (and (pair? x) (symbol? (car x))))
-
-(define (imm-rep x)
+(define (compile-imm x)
   (cond
    ((number? x) (lsh x fxshift))
    ((boolean? x) (if x t f))
    ((char? x) (+ ctag (lsh x cshift)))
-   ((null? x) null)
-   ))
+   ((null? x) null)))
 
-(define (emit-wrapped thunk)
-  (emit "(")
-  (thunk)
-  (emit ")"))
+(define (primcall? x)
+  (and (pair? x) (symbol? (car x))))
 
-(define (emit-wrapped-expr x)
-  (emit-wrapped (lambda () (emit-expr x))))
+(define *primcalls* '())
 
-(define primcalls
-  (list (cons 'fxadd1 (lambda (args)
-			(emit-wrapped-expr (car args))
-			(emit "+")
-			(emit (imm-rep 1))))
-	(cons 'fxsub1 (lambda (args)
-			(emit-wrapped-expr (car args))
-			(emit "-")
-			(emit (imm-rep 1))))
-	(cons 'char->fixnum (lambda (args)
-			      (emit-wrapped-expr (car args))
-			      (emit ">>")
-			      (emit (- cshift fxshift))))
-	(cons 'fixnum->char (lambda (args)
-			      (emit-wrapped (lambda ()
-					      (emit-wrapped-expr (car args))
-					      (emit "<<")
-					      (emit (- cshift fxshift))))
-			      (emit "+")
-			      (emit ctag)))))
+(define (make-primcall name expander)
+  (set! *primcalls* (cons (cons name expander) *primcalls*)))
 
-(define (emit-primcall x)
-  ((cdr (assq (car x) primcalls)) (cdr x)))
+;; C constant
+(define (cc x)
+  (list 'cc x))
+(make-primcall 'cc car)
+
+(define (binop r op l) (list (compile-expr r) op (compile-expr l)))
+
+(define (make-unary-primcall name expander)
+  (make-primcall name (lambda (args) (expander (car args)))))
+
+(make-unary-primcall 'fxadd1 (lambda (x) (binop x '+ 1)))
+(make-unary-primcall 'fxsub1 (lambda (x) (binop x '- 1)))
+
+(make-unary-primcall 'char->fixnum (lambda (x) (binop x '>> (cc (- cshift fxshift)))))
+(make-unary-primcall 'fixnum->char (lambda (x) (binop (cc (binop x '<< (cc (- cshift fxshift))))
+						      '+
+						      (cc ctag))))
+
+(define (to-bool tree) (list tree '? t ': f))
+
+(make-unary-primcall 'fixnum? (lambda (x) (to-bool (binop (cc (binop x '& (cc fxmask)))
+							  '==
+							  (cc fxtag)))))
+
+(define (compile-primcall x)
+  (let ((primcall-compiler (assq-ref (car x) *primcalls*)))
+    (if primcall-compiler
+	(primcall-compiler (cdr x))
+	(error "cannot compile primcall" x))))
+
+(define (compile-expr x)
+  (cond
+   ((imm? x) (compile-imm x))
+   ((primcall? x) (compile-primcall x))))
+
+(define emit display)
+(define (emitln x)
+  (emit x)
+  (newline))
+
+(define (emit-tree tree)
+  (cond
+   ((list? tree) (emit "(") (for-each emit-tree tree) (emit ")"))
+   (else (emit tree))))
 
 (define (emit-expr x)
-  (cond
-   ((imm? x) (emit (imm-rep x)))
-   ((primcall? x) (emit-primcall x))
-   ))
+  (emit-tree (compile-expr x)))
 
 (define (emit-program x)
   (emitln "#include <stdio.h>
@@ -110,4 +121,4 @@ print_scheme(scheme());
 return 0;
 }"))
 
-(emit-program '(fixnum->char (fxadd1 (char->fixnum #\A))))
+(emit-program '(fixnum? (fxadd1 (char->fixnum #\a))))

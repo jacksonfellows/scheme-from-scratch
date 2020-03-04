@@ -54,21 +54,16 @@
 
 (define (to-bool tree) (list tree '? t ': f))
 
-(make-unary-primcall 'fixnum? (lambda (x) (to-bool (binop (cc (binop x '& (cc fxmask)))
-							  '==
-							  (cc fxtag)))))
-
 (make-unary-primcall 'null? (lambda (x) (to-bool (binop x '== (cc null)))))
-
 (make-unary-primcall 'not (lambda (x) (to-bool (binop x '== (cc f)))))
 
-(make-unary-primcall 'boolean? (lambda (x) (to-bool (binop (cc (binop x '& (cc bmask)))
-							   '==
-							   (cc btag)))))
+(define (tagged? mask tag) (lambda (x) (to-bool (binop (cc (binop x '& (cc mask)))
+						       '==
+						       (cc tag)))))
 
-(make-unary-primcall 'char? (lambda (x) (to-bool (binop (cc (binop x '& (cc cmask)))
-							'==
-							(cc ctag)))))
+(make-unary-primcall 'fixnum? (tagged? fxmask fxtag))
+(make-unary-primcall 'boolean? (tagged? bmask btag))
+(make-unary-primcall 'char? (tagged? cmask ctag))
 
 (define (compile-primcall x)
   (let ((primcall-compiler (assq-ref (car x) *primcalls*)))
@@ -141,4 +136,4 @@ print_scheme(scheme());
 return 0;
 }"))
 
-(emit-program '(boolean? ()))
+(emit-program '(fixnum? -123))

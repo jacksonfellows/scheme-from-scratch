@@ -71,9 +71,19 @@
 	(primcall-compiler (cdr x))
 	(error "cannot compile primcall" x))))
 
+(define (if? x)
+  (and (pair? x) (eq? 'if (car x))))
+
+(define (from-bool x)
+  (binop x '!= (cc f)))
+
+(define (compile-if x)
+  (list (from-bool (cadr x)) '? (compile-expr (caddr x)) ': (compile-expr (cadddr x))))
+
 (define (compile-expr x)
   (cond
    ((imm? x) (compile-imm x))
+   ((if? x) (compile-if x))
    ((primcall? x) (compile-primcall x))
    (else (error "cannot compile expr" x))))
 
@@ -136,4 +146,4 @@ print_scheme(scheme());
 return 0;
 }"))
 
-(emit-program '(fixnum? -123))
+(emit-program '(if #f 1 2))

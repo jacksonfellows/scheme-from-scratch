@@ -461,6 +461,23 @@ Obj *display(Obj *args)
   return theok;
 }
 
+Obj *error(Obj *args)
+{
+  for (Obj *o = args; !isnull(o); o = cdr(o)) {
+    switch (car(o)->type) {
+    case STRING:
+      fprintf(stderr, "%s", car(o)->data.string.val);
+      break;
+    default:
+      write(stderr, car(o));
+    }
+    putc(' ', stderr);
+  }
+  ungetc(' ', stderr);
+  ERROR("\n");
+}
+
+
 Obj *eval(Obj *o, Obj *env);
 
 Obj *load(Obj *args)
@@ -539,6 +556,7 @@ Obj *initenv()
   MAKE_PRIM_PROC(env, close-port, closeport);
 
   MAKE_PRIM_PROC(env, display, display);
+  MAKE_PRIM_PROC(env, error, error);
 
   MAKE_PRIM_PROC(env, eof-object, eofobject);
 
@@ -988,9 +1006,10 @@ int main(int argc, char *argv[])
 {
   init();
   interactionenv = cons(predefinedenv, thenull);
+
   if (argc == 1) {
     Obj *o;
-    setjmp(errbuf); /* should this be inside the while (1)? */
+    setjmp(errbuf);
     while (1) {
       printf("> ");
       o = read(stdin);
@@ -999,7 +1018,10 @@ int main(int argc, char *argv[])
       write(stdout, eval(o, interactionenv));
       printf("\n");
     }
-  } else
+  } else {
+    if (setjmp(errbuf))
+      return 1;
     load(cons(makestring(argv[1], strlen(argv[1])), thenull));
+  }
   return 0;
 }

@@ -3,10 +3,17 @@
 (define fxshift 2)
 (define fxmask 3) ;; 0x03, 0b00000011
 (define fxtag 0)
+
 (define t 111) ;; 0x6F, 0b01101111
-(define f 47) ;; 0x2F, 0b00101111
+(define f 47)  ;; 0x2F, 0b00101111
+
+(define bmask 191) ;; 0xBF, 10111111
+(define btag 47)   ;; 0x2F, 00101111
+
 (define cshift 8)
-(define ctag 15) ;; 0x0F, 0b00001111
+(define cmask 255) ;; 0xFF, 0b11111111
+(define ctag 15)   ;; 0x0F, 0b00001111
+
 (define null 63) ;; 0x3F, 0b00111111
 
 (define (imm? x)
@@ -55,6 +62,14 @@
 
 (make-unary-primcall 'not (lambda (x) (to-bool (binop x '== (cc f)))))
 
+(make-unary-primcall 'boolean? (lambda (x) (to-bool (binop (cc (binop x '& (cc bmask)))
+							   '==
+							   (cc btag)))))
+
+(make-unary-primcall 'char? (lambda (x) (to-bool (binop (cc (binop x '& (cc cmask)))
+							'==
+							(cc ctag)))))
+
 (define (compile-primcall x)
   (let ((primcall-compiler (assq-ref (car x) *primcalls*)))
     (if primcall-compiler
@@ -64,7 +79,8 @@
 (define (compile-expr x)
   (cond
    ((imm? x) (compile-imm x))
-   ((primcall? x) (compile-primcall x))))
+   ((primcall? x) (compile-primcall x))
+   (else (error "cannot compile expr" x))))
 
 (define emit display)
 (define (emitln x)
@@ -125,4 +141,4 @@ print_scheme(scheme());
 return 0;
 }"))
 
-(emit-program '(not (null? ())))
+(emit-program '(boolean? ()))

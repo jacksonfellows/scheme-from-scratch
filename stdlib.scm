@@ -77,3 +77,9 @@
 ;; should accept an optional port argument
 (define (newline)
   (write-char #\newline))
+
+;; Misc
+
+(define (compose f g)
+  (lambda args
+    (f (apply g args))))

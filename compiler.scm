@@ -66,18 +66,37 @@
 (make-unary-primcall 'boolean? (tagged? bmask btag))
 (make-unary-primcall 'char? (tagged? cmask ctag))
 
+(define (make-binary-primcall name expander)
+  (make-primcall name (lambda (args) (expander (car args) (cadr args)))))
+
+(define (pure-binop op) (lambda (x y) (binop x op y)))
+
+(make-binary-primcall 'fx+ (pure-binop '+))
+(make-binary-primcall 'fx- (pure-binop '-))
+
+(make-binary-primcall 'fxlogand (pure-binop '&))
+(make-binary-primcall 'fxlogor (pure-binop "|"))
+
+(make-binary-primcall 'fx=  (compose to-bool (pure-binop '==)))
+(make-binary-primcall 'fx>  (compose to-bool (pure-binop '>)))
+(make-binary-primcall 'fx>= (compose to-bool (pure-binop '>=)))
+(make-binary-primcall 'fx<  (compose to-bool (pure-binop '<)))
+(make-binary-primcall 'fx<= (compose to-bool (pure-binop '<=)))
+
 (define (compile-primcall x)
   (let ((primcall-compiler (assq-ref (car x) *primcalls*)))
     (if primcall-compiler
 	(primcall-compiler (cdr x))
 	(error "cannot compile primcall" x))))
 
-(define (if? x)
-  (and (pair? x) (eq? 'if (car x))))
+(define (tagged-pair? tag)
+  (lambda (x)
+    (and (pair? x) (eq? tag (car x)))))
 
 (define (from-bool x)
   (binop x '!= (cc f)))
 
+(define if? (tagged-pair? 'if))
 (define (compile-if x)
   (list (from-bool (cadr x)) '? (compile-expr (caddr x)) ': (compile-expr (cadddr x))))
 
@@ -147,4 +166,4 @@ print_scheme(scheme());
 return 0;
 }"))
 
-(emit-program '(if (fxzero? 1000) #\a #\b))
+(emit-program '(fx>= 0 -10))

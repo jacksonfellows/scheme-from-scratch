@@ -4,6 +4,9 @@
 (define fxmask 3) ;; 0x03, 0b00000011
 (define fxtag 0)
 
+(define fxmin (- (lsh 1 29)))
+(define fxmax (- (lsh 1 29) 1))
+
 (define t 111) ;; 0x6F, 0b01101111
 (define f 47)  ;; 0x2F, 0b00101111
 
@@ -16,12 +19,15 @@
 
 (define null 63) ;; 0x3F, 0b00111111
 
+(define (fixnum? x)
+  (and (number? x) (<= fxmin x fxmax)))
+
 (define (imm? x)
-  (or (number? x) (boolean? x) (char? x) (null? x)))
+  (or (fixnum? x) (boolean? x) (char? x) (null? x)))
 
 (define (compile-imm x)
   (cond
-   ((number? x) (lsh x fxshift))
+   ((fixnum? x) (lsh x fxshift))
    ((boolean? x) (if x t f))
    ((char? x) (+ ctag (lsh x cshift)))
    ((null? x) null)))

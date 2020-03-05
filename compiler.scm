@@ -83,6 +83,12 @@
 (make-binary-primcall 'fx<  (compose to-bool (pure-binop '<)))
 (make-binary-primcall 'fx<= (compose to-bool (pure-binop '<=)))
 
+(make-binary-primcall 'char=  (compose to-bool (pure-binop '==)))
+(make-binary-primcall 'char>  (compose to-bool (pure-binop '>)))
+(make-binary-primcall 'char>= (compose to-bool (pure-binop '>=)))
+(make-binary-primcall 'char<  (compose to-bool (pure-binop '<)))
+(make-binary-primcall 'char<= (compose to-bool (pure-binop '<=)))
+
 (define (compile-primcall x)
   (let ((primcall-compiler (assq-ref (car x) *primcalls*)))
     (if primcall-compiler
@@ -166,4 +172,4 @@ print_scheme(scheme());
 return 0;
 }"))
 
-(emit-program '(fx>= 0 -10))
+(emit-program '(char< #\b #\a))

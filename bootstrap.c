@@ -747,6 +747,13 @@ Obj *makealist(Obj *a, Obj *b)
   return cons(cons(car(a), car(b)), makealist(cdr(a), cdr(b)));
 }
 
+Obj *bindformals(Obj *formals, Obj *args)
+{
+  if (formals->type == PAIR)
+    return makealist(formals, args);
+  return cons(cons(formals, args), thenull);
+}
+
 Obj *framelookup(Obj *sym, Obj *frame)
 {
   for (Obj *o = frame; !isnull(o); o = cdr(o))
@@ -902,7 +909,7 @@ Obj *eval(Obj *o, Obj *env)
     case PRIM_PROC:
       return (*(proc->data.primproc.proc))(evalall(cdr(o), env));
     case COMP_PROC:
-      env = cons(makealist(proc->data.compproc.formals, evalall(cdr(o), env)), proc->data.compproc.env);
+      env = cons(bindformals(proc->data.compproc.formals, evalall(cdr(o), env)), proc->data.compproc.env);
       for (o = proc->data.compproc.body; !isnull(cdr(o)); o = cdr(o))
 	eval(car(o), env);
       o = car(o);

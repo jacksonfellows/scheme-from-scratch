@@ -80,6 +80,12 @@
 (make-binary-primcall 'fx+ (pure-binop '+))
 (make-binary-primcall 'fx- (pure-binop '-))
 
+;; 4xy = (4x/4) * 4y
+(make-binary-primcall 'fx* (lambda (x y) (binop (cc (binop x '>> (cc fxshift))) '* y)))
+
+;; 4xy = (4x * 4y)/4
+;; (make-binary-primcall 'fx* (lambda (x y) (binop (cc (binop x '* y)) '>> (cc fxshift))))
+
 (make-binary-primcall 'fxlogand (pure-binop '&))
 (make-binary-primcall 'fxlogor (pure-binop "|"))
 
@@ -178,4 +184,4 @@ print_scheme(scheme());
 return 0;
 }"))
 
-(emit-program '(char< #\b #\a))
+(emit-program '(fx* 2 268435455))

@@ -32,80 +32,80 @@
    ((char? x) (+ ctag (lsh x cshift)))
    ((null? x) null)))
 
-(define (primcall? x)
-  (and (pair? x) (symbol? (car x))))
+(define *primitives* '())
 
-(define *primcalls* '())
-
-(define (make-primcall name expander)
-  (set! *primcalls* (cons (cons name expander) *primcalls*)))
+(define (make-primitive name expander)
+  (set! *primitives* (cons (cons name expander) *primitives*)))
 
 ;; C constant
 (define (cc x)
   (list 'cc x))
-(make-primcall 'cc car)
+(make-primitive 'cc car)
 
 (define (binop r op l) (list (compile-expr r) op (compile-expr l)))
 
-(define (make-unary-primcall name expander)
-  (make-primcall name (lambda (args) (expander (car args)))))
+(define (make-unary-primitive name expander)
+  (make-primitive name (lambda (args) (expander (car args)))))
 
-(make-unary-primcall 'fxadd1 (lambda (x) (binop x '+ 1)))
-(make-unary-primcall 'fxsub1 (lambda (x) (binop x '- 1)))
+(make-unary-primitive 'fxadd1 (lambda (x) (binop x '+ 1)))
+(make-unary-primitive 'fxsub1 (lambda (x) (binop x '- 1)))
 
-(make-unary-primcall 'char->fixnum (lambda (x) (binop x '>> (cc (- cshift fxshift)))))
-(make-unary-primcall 'fixnum->char (lambda (x) (binop (cc (binop x '<< (cc (- cshift fxshift))))
+(make-unary-primitive 'char->fixnum (lambda (x) (binop x '>> (cc (- cshift fxshift)))))
+(make-unary-primitive 'fixnum->char (lambda (x) (binop (cc (binop x '<< (cc (- cshift fxshift))))
 						      '+
 						      (cc ctag))))
 
 (define (to-bool tree) (list tree '? t ': f))
 
-(make-unary-primcall 'null? (lambda (x) (to-bool (binop x '== (cc null)))))
-(make-unary-primcall 'not (lambda (x) (to-bool (binop x '== (cc f)))))
-(make-unary-primcall 'fxzero? (lambda (x) (to-bool (binop x '== 0))))
+(make-unary-primitive 'null? (lambda (x) (to-bool (binop x '== (cc null)))))
+(make-unary-primitive 'not (lambda (x) (to-bool (binop x '== (cc f)))))
+(make-unary-primitive 'fxzero? (lambda (x) (to-bool (binop x '== 0))))
 
 (define (tagged? mask tag) (lambda (x) (to-bool (binop (cc (binop x '& (cc mask)))
 						       '==
 						       (cc tag)))))
 
-(make-unary-primcall 'fixnum? (tagged? fxmask fxtag))
-(make-unary-primcall 'boolean? (tagged? bmask btag))
-(make-unary-primcall 'char? (tagged? cmask ctag))
+(make-unary-primitive 'fixnum? (tagged? fxmask fxtag))
+(make-unary-primitive 'boolean? (tagged? bmask btag))
+(make-unary-primitive 'char? (tagged? cmask ctag))
 
-(define (make-binary-primcall name expander)
-  (make-primcall name (lambda (args) (expander (car args) (cadr args)))))
+(define (make-binary-primitive name expander)
+  (make-primitive name (lambda (args) (expander (car args) (cadr args)))))
 
 (define (pure-binop op) (lambda (x y) (binop x op y)))
 
-(make-binary-primcall 'fx+ (pure-binop '+))
-(make-binary-primcall 'fx- (pure-binop '-))
+(make-binary-primitive 'fx+ (pure-binop '+))
+(make-binary-primitive 'fx- (pure-binop '-))
 
 ;; 4xy = (4x/4) * 4y
-(make-binary-primcall 'fx* (lambda (x y) (binop (cc (binop x '>> (cc fxshift))) '* y)))
+(make-binary-primitive 'fx* (lambda (x y) (binop (cc (binop x '>> (cc fxshift))) '* y)))
 
 ;; 4xy = (4x * 4y)/4
-;; (make-binary-primcall 'fx* (lambda (x y) (binop (cc (binop x '* y)) '>> (cc fxshift))))
+;; (make-binary-primitive 'fx* (lambda (x y) (binop (cc (binop x '* y)) '>> (cc fxshift))))
 
-(make-binary-primcall 'fxlogand (pure-binop '&))
-(make-binary-primcall 'fxlogor (pure-binop "|"))
+(make-binary-primitive 'fxlogand (pure-binop '&))
+(make-binary-primitive 'fxlogor (pure-binop "|"))
 
-(make-binary-primcall 'fx=  (compose to-bool (pure-binop '==)))
-(make-binary-primcall 'fx>  (compose to-bool (pure-binop '>)))
-(make-binary-primcall 'fx>= (compose to-bool (pure-binop '>=)))
-(make-binary-primcall 'fx<  (compose to-bool (pure-binop '<)))
-(make-binary-primcall 'fx<= (compose to-bool (pure-binop '<=)))
+(make-binary-primitive 'fx=  (compose to-bool (pure-binop '==)))
+(make-binary-primitive 'fx>  (compose to-bool (pure-binop '>)))
+(make-binary-primitive 'fx>= (compose to-bool (pure-binop '>=)))
+(make-binary-primitive 'fx<  (compose to-bool (pure-binop '<)))
+(make-binary-primitive 'fx<= (compose to-bool (pure-binop '<=)))
 
-(make-binary-primcall 'char=  (compose to-bool (pure-binop '==)))
-(make-binary-primcall 'char>  (compose to-bool (pure-binop '>)))
-(make-binary-primcall 'char>= (compose to-bool (pure-binop '>=)))
-(make-binary-primcall 'char<  (compose to-bool (pure-binop '<)))
-(make-binary-primcall 'char<= (compose to-bool (pure-binop '<=)))
+(make-binary-primitive 'char=  (compose to-bool (pure-binop '==)))
+(make-binary-primitive 'char>  (compose to-bool (pure-binop '>)))
+(make-binary-primitive 'char>= (compose to-bool (pure-binop '>=)))
+(make-binary-primitive 'char<  (compose to-bool (pure-binop '<)))
+(make-binary-primitive 'char<= (compose to-bool (pure-binop '<=)))
+
+(define (primitive? x)
+  (assq x *primitives*))
+
+(define (primcall? x)
+  (and (pair? x) (primitive? (car x))))
 
 (define (compile-primcall x)
-  (let ((primcall-compiler (assq-ref (car x) *primcalls*)))
-    (if primcall-compiler
-	(primcall-compiler (cdr x))
-	(error "cannot compile primcall" x))))
+  ((assq-ref (car x) *primitives*) (cdr x)))
 
 (define (tagged-pair? tag)
   (lambda (x)
@@ -184,4 +184,4 @@ print_scheme(scheme());
 return 0;
 }"))
 
-(emit-program '(fx* 2 268435455))
+(emit-program '(char< #\a #\b))

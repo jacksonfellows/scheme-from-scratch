@@ -37,11 +37,6 @@
 (define (make-primitive name expander)
   (set! *primitives* (cons (cons name expander) *primitives*)))
 
-;; C constant
-(define (cc x)
-  (list 'cc x))
-(make-primitive 'cc car)
-
 (define (binop r op l) (list (compile-expr r) op (compile-expr l)))
 
 (define (make-unary-primitive name expander)
@@ -118,10 +113,16 @@
 (define (compile-if x)
   (list (from-bool (cadr x)) '? (compile-expr (caddr x)) ': (compile-expr (cadddr x))))
 
+;; C constant
+(define (cc x)
+  (list 'cc x))
+(define cc? (tagged-pair? 'cc))
+
 (define (compile-expr x)
   (cond
    ((imm? x) (compile-imm x))
    ((if? x) (compile-if x))
+   ((cc? x) (cdr x))
    ((primcall? x) (compile-primcall x))
    (else (error "cannot compile expr" x))))
 
@@ -184,4 +185,4 @@ print_scheme(scheme());
 return 0;
 }"))
 
-(emit-program '(char< #\a #\b))
+(emit-program '(fx* (fx+ 1 1) (fx+ 1 1)))

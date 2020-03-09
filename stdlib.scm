@@ -49,6 +49,13 @@
       (append (reverse (cdr lst))
 	      (list (car lst)))))
 
+(define (assq obj alist)
+  (if (null? alist)
+      #f
+      (if (eq? obj (caar alist))
+	  (car alist)
+	  (assq obj (cdr alist)))))
+
 (define (assq-ref obj alist)
   (if (null? alist)
       #f

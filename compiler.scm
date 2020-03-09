@@ -131,14 +131,6 @@
   (emit x)
   (newline))
 
-(define (emit-tree tree)
-  (cond
-   ((list? tree) (emit "(") (for-each emit-tree tree) (emit ")"))
-   (else (emit tree))))
-
-(define (emit-expr x)
-  (emit-tree (compile-expr x)))
-
 (define (emit-program x)
   (emitln "#include <stdio.h>
 
@@ -159,7 +151,7 @@ typedef unsigned int scm;")
   (emitln "
 scm scheme()
 {")
-  (emit "return ") (emit-expr x) (emitln ";
+  (emit "return ") (emit x) (emitln ";
 }")
   (emitln "
 void print_scheme(scm scheme_val)
@@ -185,4 +177,4 @@ print_scheme(scheme());
 return 0;
 }"))
 
-(emit-program '(fx* (fx+ 1 1) (fx+ 1 1)))
+(emit-program (compile-expr '(fx* (fx+ 1 1) (fx+ 1 1))))

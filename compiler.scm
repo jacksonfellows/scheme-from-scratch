@@ -1,36 +1,57 @@
 (load "stdlib.scm")
 
-(define fxshift 2)
-(define fxmask 3) ;; 0x03, 0b00000011
-(define fxtag 0)
+;; Uses the tagging system outlined in
+;; https://wiki.call-cc.org/man/4/Data%20representation
 
-(define fxmin (- (lsh 1 29)))
-(define fxmax (- (lsh 1 29) 1))
+(define wordsize 8) ;; sizeof(size_t)
+(define wordsizebits (* 8 wordsize))
 
-(define t 111) ;; 0x6F, 0b01101111
-(define f 47)  ;; 0x2F, 0b00101111
+;; fixnums
 
-(define bmask 191) ;; 0xBF, 10111111
-(define btag 47)   ;; 0x2F, 00101111
+(define fxshift 1)
+(define fxmask 1)
+(define fxtag 1)
 
-(define cshift 8)
-(define cmask 255) ;; 0xFF, 0b11111111
-(define ctag 15)   ;; 0x0F, 0b00001111
-
-(define null 63) ;; 0x3F, 0b00111111
+(define fxmin (- (lsh 1 (- wordsizebits 2))))
+(define fxmax (- (lsh 1 (- wordsizebits 2)) 1))
 
 (define (fixnum? x)
   (and (number? x) (<= fxmin x fxmax)))
+
+;; chars and booleans
+
+(define cshift 4)
+(define cmask 15) ;; 0b1111
+(define ctag 10)  ;; 0b1010
+
+(define bshift 4)
+(define bmask 15) ;; 0b1111
+(define btag 6)   ;; 0b0110
+
+(define t (+ (lsh 1 bshift) btag))
+(define f (+ (lsh 0 bshift) btag))
+
+;; other immediate objects
+
+(define specialshift 4)
+(define specialtag 14) ;; 0b1110
+
+(define nulltag 0)
+(define null (+ (lsh nulltag specialshift) specialtag))
+
+;; compile immediate objects
 
 (define (imm? x)
   (or (fixnum? x) (boolean? x) (char? x) (null? x)))
 
 (define (compile-imm x)
   (cond
-   ((fixnum? x) (lsh x fxshift))
+   ((fixnum? x) (+ fxtag (lsh x fxshift)))
    ((boolean? x) (if x t f))
    ((char? x) (+ ctag (lsh x cshift)))
    ((null? x) null)))
+
+;; define primitive procedures
 
 (define *primitives* '())
 
@@ -42,15 +63,18 @@
 (define (make-unary-primitive name expander)
   (make-primitive name (lambda (args) (expander (car args)))))
 
-(make-unary-primitive 'fxadd1 (lambda (x) (binop x '+ 1)))
-(make-unary-primitive 'fxsub1 (lambda (x) (binop x '- 1)))
+(make-unary-primitive 'fxadd1 (lambda (x) (binop x '+ (cc (lsh 1 fxshift)))))
+(make-unary-primitive 'fxsub1 (lambda (x) (binop x '- (cc (lsh 1 fxshift)))))
 
+;; only works because the high bit of ctag is 1
 (make-unary-primitive 'char->fixnum (lambda (x) (binop x '>> (cc (- cshift fxshift)))))
-(make-unary-primitive 'fixnum->char (lambda (x) (binop (cc (binop x '<< (cc (- cshift fxshift))))
-						      '+
-						      (cc ctag))))
 
-(define (to-bool tree) (list tree '? t ': f))
+;; have to subtract 0b1000 because fxtag is already set
+(make-unary-primitive 'fixnum->char (lambda (x) (binop (cc (binop x '<< (cc (- cshift fxshift))))
+						       '+
+						       (cc (- ctag (lsh fxtag 3))))))
+
+(define (to-bool x) (list (list x '<< bshift) '+ btag))
 
 (make-unary-primitive 'null? (lambda (x) (to-bool (binop x '== (cc null)))))
 (make-unary-primitive 'not (lambda (x) (to-bool (binop x '== (cc f)))))
@@ -69,14 +93,17 @@
 
 (define (pure-binop op) (lambda (x y) (binop x op y)))
 
-(make-binary-primitive 'fx+ (pure-binop '+))
-(make-binary-primitive 'fx- (pure-binop '-))
+(make-binary-primitive 'fx+ (lambda (x y) (binop x '+ (cc (binop y '- (cc fxtag))))))
+(make-binary-primitive 'fx- (lambda (x y) (binop (cc (binop x '- y)) '+ (cc fxtag))))
 
-;; 4xy = (4x/4) * 4y
-(make-binary-primitive 'fx* (lambda (x y) (binop (cc (binop x '>> (cc fxshift))) '* y)))
+(define (from-fixnum x) (binop x '>> (cc fxshift)))
+(define (to-fixnum x) (binop (cc (binop x '<< (cc fxshift))) '+ (cc fxtag)))
 
-;; 4xy = (4x * 4y)/4
-;; (make-binary-primitive 'fx* (lambda (x y) (binop (cc (binop x '* y)) '>> (cc fxshift))))
+(make-binary-primitive 'fx* (lambda (x y) (to-fixnum (cc (binop (cc (from-fixnum x))
+								'*
+								(cc (from-fixnum y))))
+						     '<<
+						     (cc fxshift))))
 
 (make-binary-primitive 'fxlogand (pure-binop '&))
 (make-binary-primitive 'fxlogor (pure-binop "|"))
@@ -93,6 +120,8 @@
 (make-binary-primitive 'char<  (compose to-bool (pure-binop '<)))
 (make-binary-primitive 'char<= (compose to-bool (pure-binop '<=)))
 
+;; compile primitive procedures
+
 (define (primitive? x)
   (assq x *primitives*))
 
@@ -101,6 +130,8 @@
 
 (define (compile-primcall x)
   ((assq-ref (car x) *primitives*) (cdr x)))
+
+;; compile if
 
 (define (tagged-pair? tag)
   (lambda (x)
@@ -118,6 +149,8 @@
   (list 'cc x))
 (define cc? (tagged-pair? 'cc))
 
+;; compile expressions
+
 (define (compile-expr x)
   (cond
    ((imm? x) (compile-imm x))
@@ -125,6 +158,8 @@
    ((cc? x) (cdr x))
    ((primcall? x) (compile-primcall x))
    (else (error "cannot compile expr" x))))
+
+;; emit a program
 
 (define emit display)
 (define (emitln x)
@@ -134,20 +169,20 @@
 (define (emit-program x)
   (emitln "#include <stdio.h>
 
-#define fxshift 2
-#define fxmask 0x03
-#define fxtag 0x00
+#define fxshift 1
+#define fxmask 1
+#define fxtag 1
 
-#define t 0x6F
-#define f 0x2F
+#define cshift 4
+#define cmask 15
+#define ctag 10
 
-#define cshift 8
-#define cmask 0xFF
-#define ctag 0x0F
+#define t 22
+#define f 6
 
-#define null 0x3F
+#define null 14
 
-typedef unsigned int scm;")
+typedef size_t scm;")
   (emitln "
 scm scheme()
 {")
@@ -157,7 +192,7 @@ scm scheme()
 void print_scheme(scm scheme_val)
 {
 if ((scheme_val & fxmask) == fxtag)
-printf(\"%d\", (int)scheme_val >> fxshift);
+printf(\"%ld\", (long)scheme_val >> fxshift);
 else if (scheme_val == t)
 printf(\"#t\");
 else if (scheme_val == f)
@@ -167,7 +202,7 @@ printf(\"#\\\\%c\", (char)(scheme_val >> cshift));
 else if (scheme_val == null)
 printf(\"'()\");
 else
-printf(\"#<unknown 0x%08x>\", scheme_val);
+printf(\"#<unknown 0x%016zx>\", scheme_val);
 printf(\"\\n\");
 }
 
@@ -177,4 +212,4 @@ print_scheme(scheme());
 return 0;
 }"))
 
-(emit-program (compile-expr '(fx* (fx+ 1 1) (fx+ 1 1))))
+(emit-program (compile-expr '(if (not (null? ())) #\a #\b)))

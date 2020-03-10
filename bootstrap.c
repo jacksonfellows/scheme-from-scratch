@@ -232,18 +232,18 @@ Obj *makeeof()
 
 Obj *makeinputport(FILE* in)
 {
-    Obj *inputport = allocobj();
-    inputport->type = INPUT_PORT;
-    inputport->data.inputport.in = in;
-    return inputport;
+  Obj *inputport = allocobj();
+  inputport->type = INPUT_PORT;
+  inputport->data.inputport.in = in;
+  return inputport;
 }
 
 Obj *makeoutputport(FILE* out)
 {
-    Obj *outputport = allocobj();
-    outputport->type = OUTPUT_PORT;
-    outputport->data.outputport.out = out;
-    return outputport;
+  Obj *outputport = allocobj();
+  outputport->type = OUTPUT_PORT;
+  outputport->data.outputport.out = out;
+  return outputport;
 }
 
 int length(Obj *pair)
@@ -448,16 +448,42 @@ Obj *closeport(Obj *args)
   return theok;
 }
 
-Obj *display(Obj *args)
+void display(FILE* out, Obj *args);
+
+/* TODO: make writepair accept a function pointer */
+void displaypair(FILE *out, Obj *o)
 {
-  FILE* out = GET_OUT_PORT(cdr(args));
-  switch (car(args)->type) {
+  display(out, car(o));
+
+  if (isnull(cdr(o)));
+  else if (cdr(o)->type == PAIR) {
+    fprintf(out, " ");
+    displaypair(out, cdr(o));
+  } else {
+    fprintf(out, " . ");
+    display(out, cdr(o));
+  }
+}
+
+void display(FILE *out, Obj *o)
+{
+  switch (o->type) {
   case STRING:
-    fprintf(out, "%s", car(args)->data.string.val);
+    fprintf(out, "%s", o->data.string.val);
+    break;
+  case PAIR:
+    fprintf(out, "(");
+    displaypair(out, o);
+    fprintf(out, ")");
     break;
   default:
-    write(out, car(args));
+    write(out, o);
   }
+}
+
+Obj *displayproc(Obj *args)
+{
+  display(GET_OUT_PORT(cdr(args)), car(args));
   return theok;
 }
 
@@ -555,7 +581,7 @@ Obj *initenv()
 
   MAKE_PRIM_PROC(env, close-port, closeport);
 
-  MAKE_PRIM_PROC(env, display, display);
+  MAKE_PRIM_PROC(env, display, displayproc);
   MAKE_PRIM_PROC(env, error, error);
 
   MAKE_PRIM_PROC(env, eof-object, eofobject);

@@ -1035,6 +1035,13 @@ void write(FILE *out, Obj *o)
   }
 }
 
+Obj *makeargslist(int argc, char *argv[], int i)
+{
+  if (i < argc)
+    return cons(makestring(argv[i], strlen(argv[i])), makeargslist(argc, argv, i+1));
+  return thenull;
+}
+
 int main(int argc, char *argv[])
 {
   init();
@@ -1055,6 +1062,9 @@ int main(int argc, char *argv[])
     if (setjmp(errbuf))
       return 1;
     load(cons(makestring(argv[1], strlen(argv[1])), thenull));
+    Obj *argslist = makeargslist(argc, argv, 2);
+    Obj *cmd = cons(MAKE_CONSTANT_SYMBOL("main"), cons(cons(thequote, cons(argslist, thenull)), thenull));
+    eval(cmd, interactionenv);
   }
   return 0;
 }

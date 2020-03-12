@@ -167,49 +167,22 @@
   (newline))
 
 (define (emit-program x)
-  (emitln "#include <stdio.h>
-
-#define fxshift 1
-#define fxmask 1
-#define fxtag 1
-
-#define cshift 4
-#define cmask 15
-#define ctag 10
-
-#define t 22
-#define f 6
-
-#define null 14
-
-typedef size_t scm;")
+  (emitln "#include \"runtime.h\"")
   (emitln "
 scm scheme()
 {")
   (emit "return ") (emit x) (emitln ";
 }")
   (emitln "
-void print_scheme(scm scheme_val)
-{
-if ((scheme_val & fxmask) == fxtag)
-printf(\"%ld\", (long)scheme_val >> fxshift);
-else if (scheme_val == t)
-printf(\"#t\");
-else if (scheme_val == f)
-printf(\"#f\");
-else if ((scheme_val & cmask) == ctag)
-printf(\"#\\\\%c\", (char)(scheme_val >> cshift));
-else if (scheme_val == null)
-printf(\"'()\");
-else
-printf(\"#<unknown 0x%016zx>\", scheme_val);
-printf(\"\\n\");
-}
-
 int main()
 {
-print_scheme(scheme());
+print_scm_val(scheme());
 return 0;
 }"))
 
-(emit-program (compile-expr '(if (not (null? ())) #\a #\b)))
+(define (main args)
+  (if (not (= (length args) 1))
+      (error "wrong # of command line arguments"))
+  (let ((o (open-input-file (car args))))
+    (emit-program (compile-expr (read o)))
+    (close-port o)))

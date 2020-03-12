@@ -1,3 +1,7 @@
+;; Booleans
+
+(define (not x) (eq? x #f))
+
 ;; Pairs and lists
 
 (define (caar x) (car (car x)))

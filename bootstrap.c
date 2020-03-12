@@ -853,6 +853,7 @@ Obj *lettolambda(Obj *letforms)
 
 Obj *eval(Obj *o, Obj *env)
 {
+  Obj *args;
  tailcall:
   switch (o->type) {
   case NUMBER:
@@ -920,8 +921,20 @@ Obj *eval(Obj *o, Obj *env)
       goto tailcall;
     }
     if (isapply(car(o))) {
-      o = cons(cadr(o), eval(caddr(o), env));
-      goto tailcall;
+      Obj *evaled = evalall(cddr(o), env);
+
+      if (isnull(evaled));
+      else if (isnull(cdr(evaled)))
+	evaled = car(evaled);
+      else {
+	Obj *e;
+	for (e = evaled; !isnull(cddr(e)); e = cdr(e));
+	setcdr(e, cadr(e));
+      }
+
+      o = cons(cadr(o), thenull);
+      args = evaled;
+      goto apply;
     }
     if (iseval(car(o))) {
       Obj *newo = eval(cadr(o), env);
@@ -930,23 +943,29 @@ Obj *eval(Obj *o, Obj *env)
       goto tailcall;
     }
 
-    Obj *proc = eval(car(o), env);
-    switch (proc->type) {
-    case PRIM_PROC:
-      return (*(proc->data.primproc.proc))(evalall(cdr(o), env));
-    case COMP_PROC:
-      env = cons(bindformals(proc->data.compproc.formals, evalall(cdr(o), env)), proc->data.compproc.env);
-      for (o = proc->data.compproc.body; !isnull(cdr(o)); o = cdr(o))
-	eval(car(o), env);
-      o = car(o);
-      goto tailcall;
-    default:
-      fprintf(stderr, "not a procedure: ");
-      write(stderr, proc);
-      ERROR("\n");
-    }
+    args = evalall(cdr(o), env);
+  apply:
+    do {
+      Obj *proc = eval(car(o), env);
+      switch (proc->type) {
+      case PRIM_PROC:
+	return (*(proc->data.primproc.proc))(args);
+      case COMP_PROC:
+	env = cons(bindformals(proc->data.compproc.formals, args), proc->data.compproc.env);
+	for (o = proc->data.compproc.body; !isnull(cdr(o)); o = cdr(o))
+	  eval(car(o), env);
+	o = car(o);
+	goto tailcall;
+      default:
+	fprintf(stderr, "not a procedure: ");
+	write(stderr, proc);
+	ERROR("\n");
+      }
+    } while (0);
   default:
-    ERROR("cannot eval object\n");
+    fprintf(stderr, "cannot eval object: ");
+    write(stderr, o);
+    ERROR("\n");
   }
 }
 

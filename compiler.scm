@@ -149,30 +149,85 @@
   (list 'cc x))
 (define cc? (tagged-pair? 'cc))
 
+;; compile lambdas
+
+(define uniq-id
+  (let ((n 0))
+    (lambda () (set! n (+ 1 n)) n)))
+
+(define *lambdas* '())
+
+(define lambda? (tagged-pair? 'lambda))
+
+(define str
+  (lambda args
+    (lambda ()
+      (for-each emit args))))
+
+(define (compile-lambda x)
+  (let ((formals (cadr x))
+	(body (compile-expr (caddr x))))
+    (let ((lambda-name (str 'l (uniq-id))))
+      (set! *lambdas* (cons (list lambda-name formals body) *lambdas*))
+      (str "allocclosure(&" lambda-name ")"))))
+
+;; compile function application
+
+(define app? pair?)
+
+(define (compile-app x)
+  (let ((proc (compile-expr (car x)))
+	(args (map compile-expr (cdr x))))
+    (str "((scm (*)(void))(((block *)(" proc "))->data[0]))("  ")")))
+
 ;; compile expressions
 
 (define (compile-expr x)
   (cond
+   ((cc? x) (cdr x))
    ((imm? x) (compile-imm x))
    ((if? x) (compile-if x))
-   ((cc? x) (cdr x))
+   ((lambda? x) (compile-lambda x))
    ((primcall? x) (compile-primcall x))
+   ((app? x) (compile-app x))
    (else (error "cannot compile expr" x))))
 
 ;; emit a program
 
-(define emit display)
+(define (emit x)
+  (if (procedure? x)
+      (x)
+      (display x)))
+
 (define (emitln x)
   (emit x)
   (newline))
 
+(define (emit-args args)
+  (if (not (null? args))
+      (begin
+	(emit "scm ") (emit (car args))
+	(if (not (null? (cdr args)))
+	    (for-each (lambda (arg)
+			(emit ", scm ") (emit arg))
+		      (cdr args))))))
+
+(define (emit-function name args expr)
+  (emit "
+scm ")
+  (emit name)
+  (emit "(") (emit-args args) (emitln ")
+{")
+  (emit "return ") (emit expr) (emitln ";
+}"))
+
 (define (emit-program x)
   (emitln "#include \"runtime.h\"")
-  (emitln "
-scm scheme()
-{")
-  (emit "return ") (emit x) (emitln ";
-}")
+
+  (for-each (lambda (l) (apply emit-function l)) *lambdas*)
+
+  (emit-function 'scheme '() x)
+
   (emitln "
 int main()
 {

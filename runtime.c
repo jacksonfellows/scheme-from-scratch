@@ -1,16 +1,34 @@
 #include "runtime.h"
 
+scm allocclosure(void *fp)
+{
+  block *closure = malloc(2);
+  closure->header = closuretag;
+  closure->data[0] = (scm)fp;
+  return (scm)closure;
+}
+
+void print_block(block *scm_val)
+{
+  if (TAGGED(scm_val->header, typemask, closuretag))
+    printf("#<procedure>");
+  else
+    printf("#<unknown block %p>", scm_val);
+}
+
 void print_scm_val(scm scm_val)
 {
-  if ((scm_val & fxmask) == fxtag)
+  if (TAGGED(scm_val, fxmask, fxtag))
     printf("%ld", (long)scm_val >> fxshift);
-  else if ((scm_val & bmask) == btag)
+  else if (TAGGED(scm_val, bmask, btag))
     printf("#%c", scm_val >> bshift ? 't' : 'f');
-  else if ((scm_val & cmask) == ctag)
+  else if (TAGGED(scm_val, cmask, ctag))
     printf("#\\%c", (char)(scm_val >> cshift));
   else if (scm_val == null)
     printf("()");
+  else if (TAGGED(scm_val, immask, 0))
+    print_block((block *)scm_val);
   else
-    printf("#<unknown 0x%016zx>", scm_val);
+    printf("#<unknown immediate 0x%016zx>", scm_val);
   printf("\n");
 }

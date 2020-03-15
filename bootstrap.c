@@ -333,6 +333,21 @@ Obj *numbertostring(Obj *args)
   return makestring(buffer, len);
 }
 
+Obj *stringappend(Obj *args)
+{
+  size_t len = 0;
+  for (Obj *o = args; !isnull(o); o = cdr(o))
+    len += strlen(car(o)->data.string.val);
+  ++len;
+
+  char *buffer = malloc(len);
+  char *b = buffer;
+  for (Obj *o = args; !isnull(o); o = cdr(o))
+    b = stpcpy(b, car(o)->data.string.val);
+
+  return makestring(buffer, len);
+}
+
 Obj *lengthproc(Obj *args)
 {
   return makefixnum(length(car(args)));
@@ -548,6 +563,8 @@ Obj *initenv()
   MAKE_PRIM_PROC(env, output-port?, outputportp);
 
   MAKE_PRIM_PROC(env, number->string, numbertostring);
+
+  MAKE_PRIM_PROC(env, string-append, stringappend);
 
   MAKE_PRIM_PROC(env, +, add);
   MAKE_PRIM_PROC(env, -, sub);

@@ -94,3 +94,11 @@
 (define (compose f g)
   (lambda args
     (f (apply g args))))
+
+(define (const a)
+  (lambda () a))
+
+(define (intercalate x lst)
+  (if (< (length lst) 2)
+      lst
+      (append (list (car lst) x) (intercalate x (cdr lst)))))

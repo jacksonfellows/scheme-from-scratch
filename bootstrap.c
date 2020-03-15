@@ -324,6 +324,15 @@ Obj *procedurep(Obj *args)
   return TOBOOLEAN(car(args)->type == PRIM_PROC || car(args)->type == COMP_PROC);
 }
 
+Obj *numbertostring(Obj *args)
+{
+  long val = car(args)->data.fixnum.val;
+  int len = snprintf(NULL, 0, "%ld", val) + 1;
+  char *buffer = malloc(len);
+  snprintf(buffer, len, "%ld", val);
+  return makestring(buffer, len);
+}
+
 Obj *lengthproc(Obj *args)
 {
   return makefixnum(length(car(args)));
@@ -537,6 +546,8 @@ Obj *initenv()
   MAKE_PRIM_PROC(env, eof-object?, eofp);
   MAKE_PRIM_PROC(env, input-port?, inputportp);
   MAKE_PRIM_PROC(env, output-port?, outputportp);
+
+  MAKE_PRIM_PROC(env, number->string, numbertostring);
 
   MAKE_PRIM_PROC(env, +, add);
   MAKE_PRIM_PROC(env, -, sub);

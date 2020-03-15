@@ -58,52 +58,54 @@
 (define (make-primitive name expander)
   (set! *primitives* (cons (cons name expander) *primitives*)))
 
-(define (binop r op l) (list (compile-expr r) op (compile-expr l)))
+(define (binop r op l env) (list (compile-expr r env) op (compile-expr l env)))
 
 (define (make-unary-primitive name expander)
-  (make-primitive name (lambda (args) (expander (car args)))))
+  (make-primitive name (lambda (args env) (expander (car args) env))))
 
-(make-unary-primitive 'fxadd1 (lambda (x) (binop x '+ (cc (lsh 1 fxshift)))))
-(make-unary-primitive 'fxsub1 (lambda (x) (binop x '- (cc (lsh 1 fxshift)))))
+(make-unary-primitive 'fxadd1 (lambda (x env) (binop x '+ (cc (lsh 1 fxshift)) env)))
+(make-unary-primitive 'fxsub1 (lambda (x env) (binop x '- (cc (lsh 1 fxshift)) env)))
 
 ;; only works because the high bit of ctag is 1
-(make-unary-primitive 'char->fixnum (lambda (x) (binop x '>> (cc (- cshift fxshift)))))
+(make-unary-primitive 'char->fixnum (lambda (x env) (binop x '>> (cc (- cshift fxshift)) env)))
 
 ;; have to subtract 0b1000 because fxtag is already set
-(make-unary-primitive 'fixnum->char (lambda (x) (binop (cc (binop x '<< (cc (- cshift fxshift))))
-						       '+
-						       (cc (- ctag (lsh fxtag 3))))))
+(make-unary-primitive 'fixnum->char (lambda (x env)
+				      (binop (cc (binop x '<< (cc (- cshift fxshift)) env))
+					     '+
+					     (cc (- ctag (lsh fxtag 3)))
+					     env)))
 
 (define (to-bool x) (list (list x '<< bshift) '+ btag))
 
-(make-unary-primitive 'null? (lambda (x) (to-bool (binop x '== (cc null)))))
-(make-unary-primitive 'not (lambda (x) (to-bool (binop x '== (cc f)))))
-(make-unary-primitive 'fxzero? (lambda (x) (to-bool (binop x '== 0))))
+(make-unary-primitive 'null? (lambda (x env) (to-bool (binop x '== (cc null) env))))
+(make-unary-primitive 'not (lambda (x env) (to-bool (binop x '== (cc f) env))))
+(make-unary-primitive 'fxzero? (lambda (x env) (to-bool (binop x '== 0 env))))
 
-(define (tagged? mask tag) (lambda (x) (to-bool (binop (cc (binop x '& (cc mask)))
-						       '==
-						       (cc tag)))))
+(define (tagged? mask tag) (lambda (x env) (to-bool (binop (cc (binop x '& (cc mask) env))
+							   '==
+							   (cc tag)
+							   env))))
 
 (make-unary-primitive 'fixnum? (tagged? fxmask fxtag))
 (make-unary-primitive 'boolean? (tagged? bmask btag))
 (make-unary-primitive 'char? (tagged? cmask ctag))
 
 (define (make-binary-primitive name expander)
-  (make-primitive name (lambda (args) (expander (car args) (cadr args)))))
+  (make-primitive name (lambda (args env) (expander (car args) (cadr args) env))))
 
-(define (pure-binop op) (lambda (x y) (binop x op y)))
+(define (pure-binop op) (lambda (x y env) (binop x op y env)))
 
-(make-binary-primitive 'fx+ (lambda (x y) (binop x '+ (cc (binop y '- (cc fxtag))))))
-(make-binary-primitive 'fx- (lambda (x y) (binop (cc (binop x '- y)) '+ (cc fxtag))))
+(make-binary-primitive 'fx+ (lambda (x y env) (binop x '+ (cc (binop y '- (cc fxtag) env)) env)))
+(make-binary-primitive 'fx- (lambda (x y env) (binop (cc (binop x '- y env)) '+ (cc fxtag) env)))
 
-(define (from-fixnum x) (binop x '>> (cc fxshift)))
-(define (to-fixnum x) (binop (cc (binop x '<< (cc fxshift))) '+ (cc fxtag)))
+(define (from-fixnum x env) (binop x '>> (cc fxshift) env))
+(define (to-fixnum x env) (binop (cc (binop x '<< (cc fxshift) env)) '+ (cc fxtag) env))
 
-(make-binary-primitive 'fx* (lambda (x y) (to-fixnum (cc (binop (cc (from-fixnum x))
-								'*
-								(cc (from-fixnum y))))
-						     '<<
-						     (cc fxshift))))
+(make-binary-primitive 'fx* (lambda (x y env) (to-fixnum (cc (binop (cc (from-fixnum x))
+								    '*
+								    (cc (from-fixnum y))
+								    env)))))
 
 (make-binary-primitive 'fxlogand (pure-binop '&))
 (make-binary-primitive 'fxlogor (pure-binop "|"))
@@ -128,8 +130,8 @@
 (define (primcall? x)
   (and (pair? x) (primitive? (car x))))
 
-(define (compile-primcall x)
-  ((assq-ref (car x) *primitives*) (cdr x)))
+(define (compile-primcall x env)
+  ((assq-ref (car x) *primitives*) (cdr x) env))
 
 ;; compile if
 
@@ -137,17 +139,34 @@
   (lambda (x)
     (and (pair? x) (eq? tag (car x)))))
 
-(define (from-bool x)
-  (binop x '!= (cc f)))
+(define (from-bool x env)
+  (binop x '!= (cc f) env))
 
 (define if? (tagged-pair? 'if))
-(define (compile-if x)
-  (list (from-bool (cadr x)) '? (compile-expr (caddr x)) ': (compile-expr (cadddr x))))
+
+(define (compile-if x env)
+  (list (from-bool (cadr x) env)
+	'? (compile-expr (caddr x) env)
+	': (compile-expr (cadddr x) env)))
 
 ;; C constant
 (define (cc x)
   (list 'cc x))
 (define cc? (tagged-pair? 'cc))
+
+;; variables
+
+(define var? symbol?)
+
+(define (empty-env) '(() . ()))
+
+(define (lookup var env)
+  (let ((id (assq-ref var env)))
+    (if id
+	id
+	(error var "is unbound"))))
+
+(define extend append)
 
 ;; compile lambdas
 
@@ -155,54 +174,60 @@
   (let ((n 0))
     (lambda () (set! n (+ 1 n)) n)))
 
+(define (uniq-var prefix)
+  (string-append prefix (number->string (uniq-id))))
+
 (define *lambdas* '())
 
 (define lambda? (tagged-pair? 'lambda))
 
-(define str
-  (lambda args
-    (lambda ()
-      (for-each emit args))))
-
-(define (compile-lambda x)
+(define (compile-lambda x env)
   (let ((formals (cadr x))
-	(body (compile-expr (caddr x))))
-    (let ((lambda-name (str 'l (uniq-id))))
-      (set! *lambdas* (cons (list lambda-name formals body) *lambdas*))
-      (str "allocclosure(&" lambda-name ")"))))
+	(body (caddr x)))
+    (let ((lambda-name (uniq-var "l"))
+	  (formal-pairs (map (lambda (f) (cons f (uniq-var "v"))) formals)))
+      (let ((new-env (extend env formal-pairs)))
+	(set! *lambdas* (cons
+			 (list lambda-name (map cdr formal-pairs) (compile-expr body new-env))
+			 *lambdas*))
+	(string-append "allocclosure(&" lambda-name ")")))))
 
 ;; compile function application
 
 (define app? pair?)
 
-(define (compile-app x)
-  (let ((proc (compile-expr (car x)))
-	(args (map compile-expr (cdr x))))
-    (str "((scm (*)(void))(((block *)(" proc "))->data[0]))("  ")")))
+(define (compile-app x env)
+  (let ((proc (compile-expr (car x) env))
+	(args (map (lambda (arg) (compile-expr arg env)) (cdr x))))
+    (list (list (list "scm(*)" (intercalate "," (map (const "scm") args)))
+		(list (list "(block*)" (list proc)) "->data[0]"))
+	  (intercalate "," args))))
 
 ;; compile expressions
 
-(define (compile-expr x)
+(define (compile-expr x env)
   (cond
    ((cc? x) (cdr x))
    ((imm? x) (compile-imm x))
-   ((if? x) (compile-if x))
-   ((lambda? x) (compile-lambda x))
-   ((primcall? x) (compile-primcall x))
-   ((app? x) (compile-app x))
+   ((var? x) (lookup x env))
+   ((if? x) (compile-if x env))
+   ((lambda? x) (compile-lambda x env))
+   ((primcall? x) (compile-primcall x env))
+   ((app? x) (compile-app x env))
    (else (error "cannot compile expr" x))))
 
 ;; emit a program
 
 (define (emit x)
-  (if (procedure? x)
-      (x)
+  (if (pair? x)
+      (begin (display "(") (for-each emit x) (display ")"))
       (display x)))
 
 (define (emitln x)
   (emit x)
   (newline))
 
+;; TODO: use intercalate
 (define (emit-args args)
   (if (not (null? args))
       (begin
@@ -239,5 +264,5 @@ return 0;
   (if (not (= (length args) 1))
       (error "wrong # of command line arguments"))
   (let ((o (open-input-file (car args))))
-    (emit-program (compile-expr (read o)))
+    (emit-program (compile-expr (read o) (empty-env)))
     (close-port o)))

@@ -115,3 +115,22 @@
 	(cons (f i (car lst)) (go (+ 1 i) (cdr lst)))))
   (go 0 lst))
 
+;; sets are sorted lists
+(define (set? x) (and (list? x) (apply < x)))
+
+;; merge
+(define (set-union a b)
+  (cond
+   ((null? a) b)
+   ((null? b) a)
+   ((< (car a) (car b)) (cons (car a) (set-union (cdr a) b)))
+   ((> (car a) (car b)) (cons (car b) (set-union a (cdr b))))
+   (else (cons (car a) (set-union (cdr a) (cdr b))))))
+
+(define (set-difference a b)
+  (cond
+   ((null? a) '())
+   ((null? b) a)
+   ((< (car a) (car b)) (cons (car a) (set-difference (cdr a) b)))
+   ((> (car a) (car b)) (set-difference a (cdr b)))
+   (else (set-difference (cdr a) (cdr b)))))

@@ -1,8 +1,8 @@
 #include "runtime.h"
 
-scm allocclosure(void *fp)
+scm allocclosure(void *fp, size_t nfvs)
 {
-  block *closure = malloc(2);
+  block *closure = malloc(sizeof(scm) * (2 + nfvs));
   closure->header = closuretag;
   closure->data[0] = (scm)fp;
   return (scm)closure;

@@ -190,18 +190,42 @@
 	(set! *lambdas* (cons
 			 (list lambda-name (map cdr formal-pairs) (compile-expr body new-env))
 			 *lambdas*))
-	(string-append "allocclosure(&" lambda-name ")")))))
+	lambda-name))))
+
+(define closure? (tagged-pair? 'closure))
+
+(define tmp-str (uniq-var "t"))
+(define tmp-sym (string->symbol tmp-str))
+
+(define (compile-closure x env)
+  (let ((l (cadr x))
+	(fvs (caddr x)))
+    (let ((lambda-name (compile-lambda l env)))
+      (let ((alloc-expr (string-append "allocclosure(&" lambda-name "," (number->string (length fvs)) ")")))
+	(if (= 0 (length fvs))
+	    alloc-expr
+	    (intercalate ","
+			 (append (list (string-append tmp-str "=" alloc-expr))
+				 (append (enumerate (lambda (i fv) (binop (list 'env-get (cc tmp-sym) i) '= fv env)) fvs)
+					 (list tmp-sym)))))))))
+
+(define env-get? (tagged-pair? 'env-get))
+
+(define (compile-env-get x env)
+  (let ((env-var (cadr x))
+	(env-i (caddr x)))
+    (list (list "(block*)" (compile-expr env-var env)) "->data[" env-i "+1]")))
 
 ;; compile function application
 
 (define app? pair?)
 
 (define (compile-app x env)
-  (let ((proc (compile-expr (car x) env))
-	(args (map (lambda (arg) (compile-expr arg env)) (cdr x))))
-    (list (list (list "scm(*)" (intercalate "," (map (const "scm") args)))
-		(list (list "(block*)" (list proc)) "->data[0]"))
-	  (intercalate "," args))))
+  (let ((proc (compile-expr (car x) env)))
+    (let ((args (cons proc (map (lambda (arg) (compile-expr arg env)) (cdr x)))))
+      (list (list (list "scm(*)" (intercalate "," (map (const "scm") args)))
+		  (list (list "(block*)" (list proc)) "->data[0]"))
+	    (intercalate "," args)))))
 
 ;; compile expressions
 
@@ -211,10 +235,68 @@
    ((imm? x) (compile-imm x))
    ((var? x) (lookup x env))
    ((if? x) (compile-if x env))
-   ((lambda? x) (compile-lambda x env))
+   ((lambda? x) (error "lambda forms should be converted to closures before compilation"))
    ((primcall? x) (compile-primcall x env))
+
+   ((closure? x) (compile-closure x env))
+   ((env-get? x) (compile-env-get x env))
+
    ((app? x) (compile-app x env))
    (else (error "cannot compile expr" x))))
+
+;; Closure conversion, following the approach outlined in
+;; http://matt.might.net/articles/compiling-scheme-to-c/
+
+(define (free-vars x)
+  (cond
+   ((cc? x) '())
+   ((imm? x) '())
+   ((var? x) (list x))
+   ((if? x) (reduce set-union (map free-vars (cdr x)) '()))
+   ((lambda? x) (set-difference (free-vars (caddr x)) (free-vars (cadr x))))
+   ((primcall? x) (reduce set-union (map free-vars (cdr x)) '()))
+
+   ((closure? x) (set-union (free-vars (cadr x)) (free-vars (caddr x))))
+   ((env-get? x) '())
+
+   ((app? x) (reduce set-union (map free-vars x) '()))
+   (else (error "cannot find free vars of expr" x))))
+
+(define (sub-vars x dict)
+  (define (subber e) (sub-vars e dict))
+  (cond
+   ((cc? x) x)
+   ((imm? x) x)
+   ((var? x) (let ((sub (assq-ref x dict)))
+	       (if sub sub x)))
+   ((if? x) (cons 'if (map subber (cdr x))))
+   ((lambda? x) (list 'lambda (cadr x) (sub-vars (caddr x) dict)))
+   ((primcall? x) (cons (car x) (map subber (cdr x))))
+
+   ((closure? x) (list 'closure (sub-vars (cadr x) dict) (map subber (caddr x))))
+   ((env-get? x) x)
+
+   ((app? x) (map subber (cdr x)))
+   (else (error "cannot substitute variables in expr" x))))
+
+(define (closure-convert x)
+  (cond
+   ((cc? x) x)
+   ((imm? x) x)
+   ((var? x) x)
+   ((if? x) (cons 'if (map closure-convert (cdr x))))
+   ((lambda? x)
+    (let ((formals (cadr x))
+	  (body (closure-convert (caddr x))))
+      (let ((fvs (set-difference (free-vars body) (free-vars formals))))
+	(let ((closure-env (string->symbol (uniq-var "e"))))
+	  (let ((dict (enumerate (lambda (i fv) (cons fv (list 'env-get closure-env i))) fvs)))
+	    (list 'closure
+		  (list 'lambda (cons closure-env formals) (sub-vars body dict))
+		  fvs))))))
+   ((primcall? x) (cons (car x) (map closure-convert (cdr x))))
+   ((app? x) (map closure-convert x))
+   (else (error "cannot closure convert expr" x))))
 
 ;; emit a program
 
@@ -237,6 +319,12 @@
 			(emit ", scm ") (emit arg))
 		      (cdr args))))))
 
+(define (emit-function-declaration name args)
+  (emit "scm ")
+  (emit name)
+  (emit (intercalate "," (map (const "scm") args)))
+  (emitln ";"))
+
 (define (emit-function name args expr)
   (emit "
 scm ")
@@ -247,7 +335,11 @@ scm ")
 }"))
 
 (define (emit-program x)
-  (emitln "#include \"runtime.h\"")
+  (emitln "#include \"runtime.h\"\n")
+
+  (emitln (string-append "scm " tmp-str ";\n"))
+
+  (for-each (lambda (l) (emit-function-declaration (car l) (cadr l))) *lambdas*)
 
   (for-each (lambda (l) (apply emit-function l)) *lambdas*)
 
@@ -264,5 +356,5 @@ return 0;
   (if (not (= (length args) 1))
       (error "wrong # of command line arguments"))
   (let ((o (open-input-file (car args))))
-    (emit-program (compile-expr (read o) (empty-env)))
+    (emit-program (compile-expr (closure-convert (read o)) (empty-env)))
     (close-port o)))

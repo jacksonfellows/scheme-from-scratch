@@ -40,7 +40,7 @@ typedef struct {
   scm data[];
 } block;
 
-scm allocclosure(void *fp);
+scm allocclosure(void *fp, size_t nfvs);
 
 void print_scm_val(scm scm_val);
 

@@ -1,0 +1,6 @@
+((((lambda (a)
+     (lambda (b)
+       (lambda (c) (if a b c))))
+   #\a)
+  #\b)
+ #\c)

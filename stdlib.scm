@@ -102,3 +102,9 @@
   (if (< (length lst) 2)
       lst
       (append (list (car lst) x) (intercalate x (cdr lst)))))
+
+(define (reduce f lst init)
+  (if (null? lst)
+      init
+      (reduce f (cdr lst) (f (car lst) init))))
+

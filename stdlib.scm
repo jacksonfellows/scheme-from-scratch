@@ -108,3 +108,10 @@
       init
       (reduce f (cdr lst) (f (car lst) init))))
 
+(define (enumerate f lst)
+  (define (go i lst)
+    (if (null? lst)
+	'()
+	(cons (f i (car lst)) (go (+ 1 i) (cdr lst)))))
+  (go 0 lst))
+

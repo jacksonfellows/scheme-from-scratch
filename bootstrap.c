@@ -333,6 +333,12 @@ Obj *numbertostring(Obj *args)
   return makestring(buffer, len);
 }
 
+Obj *stringtosymbol(Obj *args)
+{
+  char *str = car(args)->data.string.val;
+  return makesymbol(str, strlen(str) + 1);
+}
+
 Obj *stringappend(Obj *args)
 {
   size_t len = 0;
@@ -563,6 +569,7 @@ Obj *initenv()
   MAKE_PRIM_PROC(env, output-port?, outputportp);
 
   MAKE_PRIM_PROC(env, number->string, numbertostring);
+  MAKE_PRIM_PROC(env, string->symbol, stringtosymbol);
 
   MAKE_PRIM_PROC(env, string-append, stringappend);
 

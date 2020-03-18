@@ -380,9 +380,12 @@ print_scm_val(scheme());
 return 0;
 }"))
 
+(define (compile x)
+  (emit-program (compile-expr (closure-convert (desugar x)) (empty-env))))
+
 (define (main args)
   (if (not (= (length args) 1))
       (error "wrong # of command line arguments"))
   (let ((o (open-input-file (car args))))
-    (emit-program (compile-expr (closure-convert (desugar (read o))) (empty-env)))
+    (compile (read o))
     (close-port o)))

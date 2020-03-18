@@ -310,6 +310,21 @@
 
    (else (error "cannot closure convert expr" x))))
 
+;; Remove syntactic sugar
+
+(define let? (tagged-pair? 'let))
+
+(define (let->lambda x)
+  (let ((vars (map car (cadr x)))
+	(vals (map cadr (cadr x)))
+	(body (desugar (caddr x))))
+    (append (list (list 'lambda vars body)) vals)))
+
+(define (desugar x)
+  (cond
+   ((let? x) (let->lambda x))
+   (else x)))
+
 ;; emit a program
 
 (define (emit x)
@@ -369,5 +384,5 @@ return 0;
   (if (not (= (length args) 1))
       (error "wrong # of command line arguments"))
   (let ((o (open-input-file (car args))))
-    (emit-program (compile-expr (closure-convert (read o)) (empty-env)))
+    (emit-program (compile-expr (closure-convert (desugar (read o))) (empty-env)))
     (close-port o)))

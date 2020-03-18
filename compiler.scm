@@ -42,14 +42,18 @@
 ;; compile immediate objects
 
 (define (imm? x)
-  (or (fixnum? x) (boolean? x) (char? x) (null? x)))
+  (or (fixnum? x) (boolean? x) (char? x)))
+
+(define (const? x) (or (imm? x) (null? x)))
 
 (define (compile-imm x)
   (cond
    ((fixnum? x) (+ fxtag (lsh x fxshift)))
    ((boolean? x) (if x t f))
-   ((char? x) (+ ctag (lsh x cshift)))
-   ((null? x) null)))
+   ((char? x) (+ ctag (lsh x cshift)))))
+
+(define (compile-null)
+  null)
 
 ;; define primitive procedures
 
@@ -234,6 +238,19 @@
 					 (list (list "(block*)" (list tmp)) "->data[0]"))
 				   (intercalate "," args)))))))
 
+;; quote
+
+(define quote? (tagged-pair? 'quote))
+
+(define (compile-quote x)
+  (let ((v (cadr x)))
+    (cond
+     ((imm? v) (compile-imm v))
+     ((null? v) (compile-null v))
+     ((symbol? v) (error "need to make symbol" v))
+     ((pair? v) (error "need to create complex constant" v))
+     (else (error "cannot quote" v)))))
+
 ;; compile expressions
 
 (define (compile-expr x env)
@@ -242,12 +259,14 @@
    ((imm? x) (compile-imm x))
    ((var? x) (lookup x env))
    ((if? x) (compile-if x env))
+   ((quote? x) (compile-quote x))
    ((lambda? x) (error "lambda forms should be converted to closures before compilation"))
    ((primcall? x) (compile-primcall x env))
 
    ((closure? x) (compile-closure x env))
    ((env-get? x) (compile-env-get x env))
 
+   ((null? x) (error "missing procedure"))
    ((app? x) (compile-app x env))
 
    (else (error "cannot compile expr" x))))
@@ -258,7 +277,7 @@
 (define (free-vars x)
   (cond
    ((cc? x) '())
-   ((imm? x) '())
+   ((const? x) '())
    ((var? x) (list x))
    ((if? x) (reduce set-union (map free-vars (cdr x)) '()))
    ((lambda? x) (set-difference (free-vars (caddr x)) (free-vars (cadr x))))
@@ -275,7 +294,7 @@
   (define (subber e) (sub-vars e dict))
   (cond
    ((cc? x) x)
-   ((imm? x) x)
+   ((const? x) x)
    ((var? x) (let ((sub (assq-ref x dict)))
 	       (if sub sub x)))
    ((if? x) (cons 'if (map subber (cdr x))))
@@ -292,7 +311,7 @@
 (define (closure-convert x)
   (cond
    ((cc? x) x)
-   ((imm? x) x)
+   ((const? x) x)
    ((var? x) x)
    ((if? x) (cons 'if (map closure-convert (cdr x))))
    ((lambda? x)

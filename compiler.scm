@@ -221,11 +221,12 @@
 (define app? pair?)
 
 (define (compile-app x env)
-  (let ((proc (compile-expr (car x) env)))
-    (let ((args (cons proc (map (lambda (arg) (compile-expr arg env)) (cdr x)))))
-      (list (list (list "scm(*)" (intercalate "," (map (const "scm") args)))
-		  (list (list "(block*)" (list proc)) "->data[0]"))
-	    (intercalate "," args)))))
+  (let ((proc (compile-expr (car x) env))
+	(args (cons tmp-str (map (lambda (arg) (compile-expr arg env)) (cdr x)))))
+    (intercalate "," (list (list tmp-str "=" proc)
+			   (list (list (list "scm(*)" (intercalate "," (map (const "scm") args)))
+				       (list (list "(block*)" (list tmp-str)) "->data[0]"))
+				 (intercalate "," args))))))
 
 ;; compile expressions
 

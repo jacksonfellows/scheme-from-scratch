@@ -194,20 +194,25 @@
 
 (define closure? (tagged-pair? 'closure))
 
-(define tmp-str (uniq-var "t"))
-(define tmp-sym (string->symbol tmp-str))
+(define *tmps* '())
+
+(define (new-tmp)
+  (let ((tmp (string->symbol (uniq-var "t"))))
+    (set! *tmps* (cons tmp *tmps*))
+    tmp))
 
 (define (compile-closure x env)
   (let ((l (cadr x))
 	(fvs (caddr x)))
     (let ((lambda-name (compile-lambda l env)))
-      (let ((alloc-expr (string-append "allocclosure(&" lambda-name "," (number->string (length fvs)) ")")))
+      (let ((alloc-expr (string-append "allocclosure(&" lambda-name "," (number->string (length fvs)) ")"))
+	    (tmp (new-tmp)))
 	(if (= 0 (length fvs))
 	    alloc-expr
 	    (intercalate ","
-			 (append (list (string-append tmp-str "=" alloc-expr))
-				 (append (enumerate (lambda (i fv) (binop (list 'env-get (cc tmp-sym) i) '= fv env)) fvs)
-					 (list tmp-sym)))))))))
+			 (append (list (list tmp "=" alloc-expr))
+				 (append (enumerate (lambda (i fv) (binop (list 'env-get (cc tmp) i) '= fv env)) fvs)
+					 (list tmp)))))))))
 
 (define env-get? (tagged-pair? 'env-get))
 
@@ -221,12 +226,13 @@
 (define app? pair?)
 
 (define (compile-app x env)
-  (let ((proc (compile-expr (car x) env))
-	(args (cons tmp-str (map (lambda (arg) (compile-expr arg env)) (cdr x)))))
-    (intercalate "," (list (list tmp-str "=" proc)
-			   (list (list (list "scm(*)" (intercalate "," (map (const "scm") args)))
-				       (list (list "(block*)" (list tmp-str)) "->data[0]"))
-				 (intercalate "," args))))))
+  (let ((tmp (new-tmp)))
+    (let ((proc (compile-expr (car x) env))
+	  (args (cons tmp (map (lambda (arg) (compile-expr arg env)) (cdr x)))))
+      (intercalate "," (list (list tmp "=" proc)
+			     (list (list (list "scm(*)" (intercalate "," (map (const "scm") args)))
+					 (list (list "(block*)" (list tmp)) "->data[0]"))
+				   (intercalate "," args)))))))
 
 ;; compile expressions
 
@@ -338,7 +344,8 @@ scm ")
 (define (emit-program x)
   (emitln "#include \"runtime.h\"\n")
 
-  (emitln (string-append "scm " tmp-str ";\n"))
+  (for-each (lambda (tmp) (emit "scm ") (emit tmp) (emitln ";")) *tmps*)
+  (emitln "")
 
   (for-each (lambda (l) (emit-function-declaration (car l) (cadr l))) *lambdas*)
 

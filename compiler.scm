@@ -249,6 +249,7 @@
    ((env-get? x) (compile-env-get x env))
 
    ((app? x) (compile-app x env))
+
    (else (error "cannot compile expr" x))))
 
 ;; Closure conversion, following the approach outlined in
@@ -267,6 +268,7 @@
    ((env-get? x) '())
 
    ((app? x) (reduce set-union (map free-vars x) '()))
+
    (else (error "cannot find free vars of expr" x))))
 
 (define (sub-vars x dict)
@@ -283,7 +285,8 @@
    ((closure? x) (list 'closure (sub-vars (cadr x) dict) (map subber (caddr x))))
    ((env-get? x) x)
 
-   ((app? x) (map subber (cdr x)))
+   ((app? x) (map subber x))
+
    (else (error "cannot substitute variables in expr" x))))
 
 (define (closure-convert x)
@@ -302,7 +305,9 @@
 		  (list 'lambda (cons closure-env formals) (sub-vars body dict))
 		  fvs))))))
    ((primcall? x) (cons (car x) (map closure-convert (cdr x))))
+
    ((app? x) (map closure-convert x))
+
    (else (error "cannot closure convert expr" x))))
 
 ;; emit a program

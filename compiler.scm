@@ -44,7 +44,7 @@
 (define (imm? x)
   (or (fixnum? x) (boolean? x) (char? x)))
 
-(define (const? x) (or (imm? x) (null? x)))
+(define (const? x) (or (imm? x) (null? x) (string? x)))
 
 (define (compile-imm x)
   (cond
@@ -54,6 +54,11 @@
 
 (define (compile-null)
   null)
+
+;; compile strings
+
+(define (compile-string x)
+  (list "allocstring(\"" x "\"," (+ (string-length x) 1) ")"))
 
 ;; define primitive procedures
 
@@ -248,7 +253,7 @@
      ((imm? v) (compile-imm v))
      ((null? v) (compile-null v))
      ((symbol? v) (error "need to make symbol" v))
-     ((pair? v) (error "need to create complex constant" v))
+     ((or (pair? v) (string? v)) (error "need to create complex constant" v))
      (else (error "cannot quote" v)))))
 
 ;; compile expressions
@@ -257,6 +262,7 @@
   (cond
    ((cc? x) (cdr x))
    ((imm? x) (compile-imm x))
+   ((string? x) (compile-string x))
    ((var? x) (lookup x env))
    ((if? x) (compile-if x env))
    ((quote? x) (compile-quote x))

@@ -1,5 +1,13 @@
 #include "runtime.h"
 
+scm allocstring(char *str, size_t len)
+{
+  block *string = malloc(sizeof(scm) * (1 + len));
+  string->header = TAG(string->header, headershift, stringtag);
+  strncpy((char *)string->data, str, len);
+  return (scm)string;
+}
+
 scm allocclosure(void *fp, size_t nfvs)
 {
   block *closure = malloc(sizeof(scm) * (2 + nfvs));
@@ -10,7 +18,9 @@ scm allocclosure(void *fp, size_t nfvs)
 
 void print_block(block *scm_val)
 {
-  if (TAGGED(scm_val->header, typemask, closuretag))
+  if (TAGGED(scm_val->header, headermask, stringtag))
+    printf("\"%s\"", (char *)scm_val->data);
+  else if (TAGGED(scm_val->header, headermask, closuretag))
     printf("#<procedure>");
   else
     printf("#<unknown block %p>", scm_val);

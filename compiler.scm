@@ -58,7 +58,7 @@
 ;; compile strings
 
 (define (compile-string x)
-  (list "allocstring(\"" x "\"," (+ (string-length x) 1) ")"))
+  (list "allocstring(\"" x "\"," (string-length x) ")"))
 
 ;; define primitive procedures
 
@@ -130,6 +130,12 @@
 (make-binary-primitive 'char>= (compose to-bool (pure-binop '>=)))
 (make-binary-primitive 'char<  (compose to-bool (pure-binop '<)))
 (make-binary-primitive 'char<= (compose to-bool (pure-binop '<=)))
+
+(make-unary-primitive 'string-length
+		      (lambda (x env)
+			(to-fixnum
+			 (cc (list (list "(block*)" (compile-expr x env)) "->header >> headershift"))
+			 env)))
 
 ;; compile primitive procedures
 

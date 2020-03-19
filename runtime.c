@@ -2,9 +2,9 @@
 
 scm allocstring(char *str, size_t len)
 {
-  block *string = malloc(sizeof(scm) * (1 + len));
-  string->header = TAG(string->header, headershift, stringtag);
-  strncpy((char *)string->data, str, len);
+  block *string = malloc(sizeof(scm) * (2 + len));
+  string->header = TAG(len, headershift, stringtag);
+  strncpy((char *)string->data, str, len + 1);
   return (scm)string;
 }
 

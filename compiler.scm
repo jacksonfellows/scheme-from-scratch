@@ -269,9 +269,9 @@
    ((cc? x) (cdr x))
    ((imm? x) (compile-imm x))
    ((string? x) (compile-string x))
+   ((quote? x) (compile-quote x))
    ((var? x) (lookup x env))
    ((if? x) (compile-if x env))
-   ((quote? x) (compile-quote x))
    ((lambda? x) (error "lambda forms should be converted to closures before compilation"))
    ((primcall? x) (compile-primcall x env))
 
@@ -353,7 +353,18 @@
 
 (define (desugar x)
   (cond
+   ((cc? x) x)
+   ((const? x) x)
+   ((quote? x) x)
+   ((var? x) x)
+   ((if? x) (cons 'if (map desugar (cdr x))))
+   ((lambda? x) (list 'lambda (cadr x) (desugar (caddr x))))
+   ((primcall? x) (cons (car x) (map desugar (cdr x))))
+
    ((let? x) (let->lambda x))
+
+   ((app? x) (map desugar x))
+
    (else x)))
 
 ;; emit a program

@@ -339,6 +339,12 @@ Obj *stringtosymbol(Obj *args)
   return makesymbol(str, strlen(str) + 1);
 }
 
+Obj *symboltostring(Obj *args)
+{
+  char *name = car(args)->data.symbol.name;
+  return makestring(name, strlen(name) + 1);
+}
+
 Obj *stringlength(Obj *args)
 {
   return makefixnum(strlen(car(args)->data.string.val));
@@ -575,6 +581,7 @@ Obj *initenv()
 
   MAKE_PRIM_PROC(env, number->string, numbertostring);
   MAKE_PRIM_PROC(env, string->symbol, stringtosymbol);
+  MAKE_PRIM_PROC(env, symbol->string, symboltostring);
 
   MAKE_PRIM_PROC(env, string-length, stringlength);
   MAKE_PRIM_PROC(env, string-append, stringappend);

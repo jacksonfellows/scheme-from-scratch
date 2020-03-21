@@ -60,6 +60,12 @@
 (define (compile-string x)
   (list "allocstring(\"" x "\"," (string-length x) ")"))
 
+;; compile symbols
+
+(define (compile-symbol x)
+  (let ((s (symbol->string x)))
+    (list "allocsymbol(\"" s "\"," (string-length s) ")")))
+
 ;; define primitive procedures
 
 (define *primitives* '())
@@ -258,7 +264,7 @@
     (cond
      ((imm? v) (compile-imm v))
      ((null? v) (compile-null v))
-     ((symbol? v) (error "need to make symbol" v))
+     ((symbol? v) (compile-symbol v))
      ((or (pair? v) (string? v)) (error "need to create complex constant" v))
      (else (error "cannot quote" v)))))
 

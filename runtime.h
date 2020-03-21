@@ -43,6 +43,7 @@ typedef struct {
   scm data[];
 } block;
 
+scm allocsymbol(char *name, size_t len);
 scm allocstring(char *str, size_t len);
 scm allocclosure(void *fp, size_t nfvs);
 

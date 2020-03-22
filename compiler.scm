@@ -143,6 +143,9 @@
 			 (cc (list (list "(block*)" (compile-expr x env)) "->header >> headershift"))
 			 env)))
 
+(make-binary-primitive 'eq? (compose to-bool (pure-binop '==)))
+(make-binary-primitive 'eqv? (compose to-bool (pure-binop '==)))
+
 ;; compile primitive procedures
 
 (define (primitive? x)

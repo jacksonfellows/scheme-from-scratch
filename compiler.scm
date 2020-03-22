@@ -93,8 +93,8 @@
 
 (define (to-bool x) (list (list x '<< bshift) '+ btag))
 
-(make-unary-primitive 'null? (lambda (x env) (to-bool (binop x '== (cc null) env))))
-(make-unary-primitive 'not (lambda (x env) (to-bool (binop x '== (cc f) env))))
+(make-unary-primitive 'null? (lambda (x env) (to-bool (binop x '== ''() env))))
+(make-unary-primitive 'not (lambda (x env) (to-bool (binop x '== #f env))))
 (make-unary-primitive 'fxzero? (lambda (x env) (to-bool (binop x '== 0 env))))
 
 (define (tagged? mask tag) (lambda (x env) (to-bool (binop (cc (binop x '& (cc mask) env))

@@ -157,6 +157,14 @@
 (make-binary-primitive 'eq? (compose to-bool (pure-binop '==)))
 (make-binary-primitive 'eqv? (compose to-bool (pure-binop '==)))
 
+(define (func f)
+  (lambda (args env) (list f (intercalate "," (map (lambda (arg) (compile-expr arg env)) args)))))
+
+(make-primitive 'car (func "CAR"))
+(make-primitive 'cdr (func "CDR"))
+
+(make-primitive 'cons (func "cons"))
+
 ;; compile primitive procedures
 
 (define (primitive? x)

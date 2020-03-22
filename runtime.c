@@ -46,19 +46,50 @@ scm allocclosure(void *fp, size_t nfvs)
   return (scm)closure;
 }
 
-void print_block(block *scm_val)
+scm cons(scm car, scm cdr)
+{
+  block *pair = malloc(sizeof(scm) * 3);
+  pair->header = pairtag;
+  pair->data[0] = car;
+  pair->data[1] = cdr;
+  return (scm)pair;
+}
+
+void write(scm scm_val);
+
+void write_pair(block *pair)
+{
+  write(CAR(pair));
+  scm cdr = CDR(pair);
+  if (cdr == null);
+  else if (IS_PAIR(cdr)) {
+    printf(" ");
+    write_pair((block *)cdr);
+  }
+  else {
+    printf(" . ");
+    write(cdr);
+  }
+}
+
+void write_block(block *scm_val)
 {
   if (TAGGED(scm_val->header, headermask, symboltag))
     printf("%s", (char *)scm_val->data);
   else if (TAGGED(scm_val->header, headermask, stringtag))
     printf("\"%s\"", (char *)scm_val->data);
+  else if (TAGGED(scm_val->header, headermask, pairtag)) {
+    printf("(");
+    write_pair(scm_val);
+    printf(")");
+  }
   else if (TAGGED(scm_val->header, headermask, closuretag))
     printf("#<procedure>");
   else
     printf("#<unknown block %p>", scm_val);
 }
 
-void print_scm_val(scm scm_val)
+void write(scm scm_val)
 {
   if (TAGGED(scm_val, fxmask, fxtag))
     printf("%ld", (long)scm_val >> fxshift);
@@ -69,8 +100,13 @@ void print_scm_val(scm scm_val)
   else if (scm_val == null)
     printf("()");
   else if (TAGGED(scm_val, immask, 0))
-    print_block((block *)scm_val);
+    write_block((block *)scm_val);
   else
     printf("#<unknown immediate 0x%016zx>", scm_val);
+}
+
+void print_scm_val(scm scm_val)
+{
+  write(scm_val);
   printf("\n");
 }

@@ -43,8 +43,14 @@ typedef struct {
   scm data[];
 } block;
 
+#define CAR(pair) (((block*)pair)->data[0])
+#define CDR(pair) (((block*)pair)->data[1])
+
+#define IS_PAIR(x) (TAGGED(x,immask,0) && TAGGED((((block*)x))->header,headermask,pairtag))
+
 scm allocsymbol(char *name, size_t len);
 scm allocstring(char *str, size_t len);
+scm cons(scm car, scm cdr);
 scm allocclosure(void *fp, size_t nfvs);
 
 void print_scm_val(scm scm_val);

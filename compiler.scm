@@ -66,6 +66,17 @@
   (let ((s (symbol->string x)))
     (list "allocsymbol(\"" s "\"," (string-length s) ")")))
 
+;; compile pairs
+
+(define (compile-quoted-pair x)
+  (cond
+   ((null? x) (compile-null))
+   ((pair? x)
+    (list "cons" (list (compile-quoted (car x))
+		       ","
+		       (compile-quoted-pair (cdr x)))))
+   (else (compile-quoted x))))
+
 ;; define primitive procedures
 
 (define *primitives* '())
@@ -263,13 +274,16 @@
 (define quote? (tagged-pair? 'quote))
 
 (define (compile-quote x)
-  (let ((v (cadr x)))
-    (cond
-     ((imm? v) (compile-imm v))
-     ((null? v) (compile-null v))
-     ((symbol? v) (compile-symbol v))
-     ((or (pair? v) (string? v)) (error "need to create complex constant" v))
-     (else (error "cannot quote" v)))))
+  (compile-quoted (cadr x)))
+
+(define (compile-quoted x)
+  (cond
+   ((imm? x) (compile-imm x))
+   ((null? x) (compile-null x))
+   ((symbol? x) (compile-symbol x))
+   ((string? x) (compile-string x))
+   ((pair? x) (compile-quoted-pair x))
+   (else (error "cannot quote" x))))
 
 ;; compile expressions
 
@@ -299,6 +313,7 @@
   (cond
    ((cc? x) '())
    ((const? x) '())
+   ((quote? x) '())
    ((var? x) (list x))
    ((if? x) (reduce set-union (map free-vars (cdr x)) '()))
    ((lambda? x) (set-difference (free-vars (caddr x)) (free-vars (cadr x))))
@@ -316,6 +331,7 @@
   (cond
    ((cc? x) x)
    ((const? x) x)
+   ((quote? x) x)
    ((var? x) (let ((sub (assq-ref x dict)))
 	       (if sub sub x)))
    ((if? x) (cons 'if (map subber (cdr x))))
@@ -333,6 +349,7 @@
   (cond
    ((cc? x) x)
    ((const? x) x)
+   ((quote? x) x)
    ((var? x) x)
    ((if? x) (cons 'if (map closure-convert (cdr x))))
    ((lambda? x)

@@ -134,3 +134,6 @@
    ((< (car a) (car b)) (cons (car a) (set-difference (cdr a) b)))
    ((> (car a) (car b)) (set-difference a (cdr b)))
    (else (set-difference (cdr a) (cdr b)))))
+
+(define (list->set lst)
+  (reduce set-union (map list lst) '()))

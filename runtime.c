@@ -1,5 +1,12 @@
 #include "runtime.h"
 
+scm allocvector(size_t len)
+{
+  block *vector = malloc(sizeof(scm) * (len + 1));
+  vector->header = TAG(len, headershift, vectortag);
+  return (scm)vector;
+}
+
 typedef struct _Node {
   block *scm_val;
   struct _Node *next;

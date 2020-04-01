@@ -127,6 +127,13 @@
    ((> (car a) (car b)) (cons (car b) (set-union a (cdr b))))
    (else (cons (car a) (set-union (cdr a) (cdr b))))))
 
+(define (set-intersection a b)
+  (cond
+   ((or (null? a) (null? b)) '())
+   ((< (car a) (car b)) (set-intersection (cdr a) b))
+   ((> (car a) (car b)) (set-intersection a (cdr b)))
+   (else (cons (car a) (set-intersection (cdr a) (cdr b))))))
+
 (define (set-difference a b)
   (cond
    ((null? a) '())

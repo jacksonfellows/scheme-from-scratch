@@ -78,6 +78,7 @@
    (else (compile-quoted x))))
 
 ;; define primitive procedures
+;; TODO: primitive procedures should receive their arguments already evaluated
 
 (define *primitives* '())
 
@@ -165,6 +166,23 @@
 
 (make-primitive 'cons (func "cons"))
 
+(make-unary-primitive 'make-vector (lambda (x env)
+				     (list "allocvector(" x ")")))
+
+(make-binary-primitive 'vector-ref (lambda (v i env)
+				     (list "((block*)" (compile-expr v env) ")->data[" i "]")))
+
+;; TODO: deal with n-ary arguments
+;; TODO: should not be a primitive
+(make-unary-primitive 'vector (lambda (x env)
+				(let ((tmp (new-tmp)))
+				  (intercalate
+				   ","
+				   (list
+				    (list tmp "=" (compile-expr (list 'make-vector 1) env))
+				    (compile-expr (list 'set! (list 'vector-ref (cc tmp) 0) x) env)
+				    tmp)))))
+
 ;; compile primitive procedures
 
 (define (primitive? x)
@@ -211,6 +229,13 @@
 
 (define extend append)
 
+;; assignment
+
+(define set!? (tagged-pair? 'set!))
+
+(define (compile-set! x env)
+  (binop (cadr x) '= (caddr x) env))
+
 ;; compile lambdas
 
 (define uniq-id
@@ -226,12 +251,12 @@
 
 (define (compile-lambda x env)
   (let ((formals (cadr x))
-	(body (caddr x)))
+	(body (cddr x)))
     (let ((lambda-name (uniq-var "l"))
 	  (formal-pairs (map (lambda (f) (cons f (uniq-var "v"))) formals)))
       (let ((new-env (extend env formal-pairs)))
 	(set! *lambdas* (cons
-			 (list lambda-name (map cdr formal-pairs) (compile-expr body new-env))
+			 (list lambda-name (map cdr formal-pairs) (compile-begin-expr body new-env))
 			 *lambdas*))
 	lambda-name))))
 
@@ -252,17 +277,28 @@
 	    (tmp (new-tmp)))
 	(if (= 0 (length fvs))
 	    alloc-expr
-	    (intercalate ","
-			 (append (list (list tmp "=" alloc-expr))
-				 (append (enumerate (lambda (i fv) (binop (list 'env-get (cc tmp) i) '= fv env)) fvs)
-					 (list tmp)))))))))
+	    (intercalate
+	     ","
+	     (append (list (list tmp "=" alloc-expr))
+		     (append (enumerate (lambda (i fv) (binop (list 'env-get (cc tmp) i) '= fv env)) fvs)
+			     (list tmp)))))))))
 
 (define env-get? (tagged-pair? 'env-get))
 
 (define (compile-env-get x env)
   (let ((env-var (cadr x))
 	(env-i (caddr x)))
-    (list (list "(block*)" (compile-expr env-var env)) "->data[" env-i "+1]")))
+    (list (list "(block*)" (compile-expr env-var env)) "->data[" (+ env-i 1) "]")))
+
+;; begin
+
+(define begin? (tagged-pair? 'begin))
+
+(define (compile-begin x env)
+  (compile-begin-expr (cdr x) env))
+
+(define (compile-begin-expr x env)
+  (intercalate "," (map (lambda (a) (compile-expr a env)) x)))
 
 ;; compile function application
 
@@ -297,19 +333,29 @@
 
 (define (compile-expr x env)
   (cond
+   ;; constants
    ((cc? x) (cdr x))
    ((imm? x) (compile-imm x))
+   ((null? x) (error "missing procedure"))
    ((string? x) (compile-string x))
-   ((quote? x) (compile-quote x))
-   ((var? x) (lookup x env))
-   ((if? x) (compile-if x env))
-   ((lambda? x) (error "lambda forms should be converted to closures before compilation"))
-   ((primcall? x) (compile-primcall x env))
 
+   ;; variables
+   ((var? x) (lookup x env))
+
+   ;; special forms
+   ((quote? x) (compile-quote x))
+   ((set!? x) (compile-set! x env))
+   ((if? x) (compile-if x env))
+   ((begin? x) (compile-begin x env))
+
+   ;; closures
    ((closure? x) (compile-closure x env))
    ((env-get? x) (compile-env-get x env))
 
-   ((null? x) (error "missing procedure"))
+   ;; primitive calls
+   ((primcall? x) (compile-primcall x env))
+
+   ;; function application
    ((app? x) (compile-app x env))
 
    (else (error "cannot compile expr" x))))
@@ -319,17 +365,28 @@
 
 (define (free-vars x)
   (cond
-   ((cc? x) '())
+   ;; constants
    ((const? x) '())
-   ((quote? x) '())
-   ((var? x) (list x))
-   ((if? x) (reduce set-union (map free-vars (cdr x)) '()))
-   ((lambda? x) (set-difference (free-vars (caddr x)) (free-vars (cadr x))))
-   ((primcall? x) (reduce set-union (map free-vars (cdr x)) '()))
 
+   ;; variables
+   ((var? x) (list x))
+
+   ;; special forms
+   ((quote? x) '())
+   ((set!? x) (set-union (free-vars (cadr x)) (free-vars (caddr x))))
+   ((if? x) (reduce set-union (map free-vars (cdr x)) '()))
+   ((begin? x) (reduce set-union (map free-vars (cdr x)) '()))
+   ((lambda? x) (set-difference (reduce set-union (map free-vars (cddr x)) '())
+				(list->set (cadr x))))
+
+   ;; closures
    ((closure? x) (set-union (free-vars (cadr x)) (free-vars (caddr x))))
    ((env-get? x) '())
 
+   ;; primitive calls
+   ((primcall? x) (reduce set-union (map free-vars (cdr x)) '()))
+
+   ;; function application
    ((app? x) (reduce set-union (map free-vars x) '()))
 
    (else (error "cannot find free vars of expr" x))))
@@ -337,43 +394,119 @@
 (define (sub-vars x dict)
   (define (subber e) (sub-vars e dict))
   (cond
-   ((cc? x) x)
+   ;; constants
    ((const? x) x)
-   ((quote? x) x)
+
+   ;; variables
    ((var? x) (let ((sub (assq-ref x dict)))
 	       (if sub sub x)))
-   ((if? x) (cons 'if (map subber (cdr x))))
-   ((lambda? x) (list 'lambda (cadr x) (sub-vars (caddr x) dict)))
-   ((primcall? x) (cons (car x) (map subber (cdr x))))
 
+   ;; special forms
+   ((quote? x) x)
+   ((set!? x) (cons 'set! (map subber (cdr x))))
+   ((if? x) (cons 'if (map subber (cdr x))))
+   ((begin? x) (cons 'begin (map subber (cdr x))))
+   ((lambda? x) (append (list 'lambda (cadr x)) (map subber (cddr x))))
+
+   ;; closures
    ((closure? x) (list 'closure (sub-vars (cadr x) dict) (map subber (caddr x))))
    ((env-get? x) x)
 
+   ;; primitive calls
+   ((primcall? x) (cons (car x) (map subber (cdr x))))
+
+   ;; function application
    ((app? x) (map subber x))
 
    (else (error "cannot substitute variables in expr" x))))
 
 (define (closure-convert x)
   (cond
-   ((cc? x) x)
+   ;; constants
    ((const? x) x)
-   ((quote? x) x)
+
+   ;; variables
    ((var? x) x)
+
+   ;; special forms
+   ((quote? x) x)
+   ((set!? x) (list 'set! (cadr x) (closure-convert (caddr x))))
    ((if? x) (cons 'if (map closure-convert (cdr x))))
+   ((begin? x) (cons 'begin (map closure-convert (cdr x))))
    ((lambda? x)
     (let ((formals (cadr x))
-	  (body (closure-convert (caddr x))))
+	  (body (map closure-convert (cddr x))))
       (let ((fvs (set-difference (free-vars body) (free-vars formals))))
 	(let ((closure-env (string->symbol (uniq-var "e"))))
 	  (let ((dict (enumerate (lambda (i fv) (cons fv (list 'env-get closure-env i))) fvs)))
 	    (list 'closure
-		  (list 'lambda (cons closure-env formals) (sub-vars body dict))
+		  (append (list 'lambda (cons closure-env formals)) (map (lambda (e) (sub-vars e dict)) body))
 		  fvs))))))
+
+   ;; primitive calls
    ((primcall? x) (cons (car x) (map closure-convert (cdr x))))
 
+   ;; function application
    ((app? x) (map closure-convert x))
 
    (else (error "cannot closure convert expr" x))))
+
+;; Convert mutable variables
+
+(define (mutated-vars x)
+  (cond
+   ;; constants
+   ((const? x) '())
+
+   ;; variables
+   ((var? x) '())
+
+   ;; special forms
+   ((quote? x) '())
+   ((set!? x) (list (cadr x)))
+   ((if? x) (reduce set-union (map mutated-vars (cdr x)) '()))
+   ((begin? x) (reduce set-union (map mutated-vars (cdr x)) '()))
+   ((lambda? x) (set-difference (reduce set-union (map mutated-vars (cddr x)) '())
+				(list->set (cadr x))))
+
+   ;; primitive calls
+   ((primcall? x) (reduce set-union (map mutated-vars (cdr x)) '()))
+
+   ;; function application
+   ((app? x) (reduce set-union (map mutated-vars x) '()))
+
+   (else (error "cannot find mutated vars in expr" x))))
+
+(define (convert-mutable-vars x)
+  (cond
+   ;; constants
+   ((const? x) x)
+
+   ;; variables
+   ((var? x) x)
+
+   ;; special forms
+   ((quote? x) x)
+   ((set!? x) (list 'set! (cadr x) (convert-mutable-vars (caddr x))))
+   ((if? x) (cons 'if (map convert-mutable-vars (cdr x))))
+   ((begin? x) (cons 'begin (map convert-mutable-vars (cdr x))))
+   ((lambda? x)
+    (let ((formals (cadr x))
+	  (body (map convert-mutable-vars (cddr x))))
+      (let ((mvs (set-intersection (mutated-vars body) formals)))
+	(cons 'lambda
+	      (cons formals
+		    (append
+		     (map (lambda (mv) (list 'set! mv (list 'vector mv))) mvs)
+		     (sub-vars body (map (lambda (mv) (cons mv (list 'vector-ref mv 0))) mvs))))))))
+
+   ;; primitive calls
+   ((primcall? x) (cons (car x) (map convert-mutable-vars (cdr x))))
+
+   ;; function application
+   ((app? x) (map convert-mutable-vars x))
+
+   (else (error "cannot convert mutable vars in expr" x))))
 
 ;; Remove syntactic sugar
 
@@ -382,24 +515,34 @@
 (define (let->lambda x)
   (let ((vars (map car (cadr x)))
 	(vals (map cadr (cadr x)))
-	(body (desugar (caddr x))))
-    (append (list (list 'lambda vars body)) vals)))
+	(body (map desugar (cddr x))))
+    (append (list (append (list 'lambda vars) body)) vals)))
 
 (define (desugar x)
   (cond
-   ((cc? x) x)
+   ;; constants
    ((const? x) x)
-   ((quote? x) x)
+
+   ;; variables
    ((var? x) x)
+
+   ;; special forms
+   ((quote? x) x)
+   ((set!? x) (list 'set! (cadr x) (desugar (caddr x))))
    ((if? x) (cons 'if (map desugar (cdr x))))
-   ((lambda? x) (list 'lambda (cadr x) (desugar (caddr x))))
+   ((begin? x) (cons 'begin (map desugar (cdr x))))
+   ((lambda? x) (append (list 'lambda (cadr x)) (map desugar (cddr x))))
+
+   ;; sugar
+   ((let? x) (desugar (let->lambda x)))
+
+   ;; primitive calls
    ((primcall? x) (cons (car x) (map desugar (cdr x))))
 
-   ((let? x) (let->lambda x))
-
+   ;; function application
    ((app? x) (map desugar x))
 
-   (else x)))
+   (else (error "cannot desugar" x))))
 
 ;; emit a program
 
@@ -457,7 +600,7 @@ return 0;
 }"))
 
 (define (compile x)
-  (emit-program (compile-expr (closure-convert (desugar x)) (empty-env))))
+  (emit-program (compile-expr (closure-convert (convert-mutable-vars (desugar x))) (empty-env))))
 
 (define (main args)
   (if (not (= (length args) 1))

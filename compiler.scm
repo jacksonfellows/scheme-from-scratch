@@ -518,6 +518,21 @@
         (body (map desugar (cddr x))))
     (append (list (append (list 'lambda vars) body)) vals)))
 
+(define letrec? (tagged-pair? 'letrec))
+
+(define (map2 f xs ys)
+  (if (or (null? xs) (null? ys))
+      '()
+      (cons (f (car xs) (car ys)) (map2 f (cdr xs) (cdr ys)))))
+
+(define (letrec->letset! x)
+  (let ((vars (map car (cadr x)))
+        (vals (map cadr (cadr x)))
+        (body (map desugar (cddr x))))
+    (append (list 'let (map (lambda (var) (list var ''())) vars))
+            (append (map2 (lambda (var val) (list 'set! var val)) vars vals)
+                    body))))
+
 (define (desugar x)
   (cond
    ;; constants
@@ -535,6 +550,7 @@
 
    ;; sugar
    ((let? x) (desugar (let->lambda x)))
+   ((letrec? x) (desugar (letrec->letset! x)))
 
    ;; primitive calls
    ((primcall? x) (cons (car x) (map desugar (cdr x))))

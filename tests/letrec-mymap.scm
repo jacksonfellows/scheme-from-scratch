@@ -1,0 +1,6 @@
+(letrec ((mymap (lambda (f lst)
+                  (if (null? lst)
+                      '()
+                      (cons (f (car lst))
+                            (mymap f (cdr lst)))))))
+  (mymap car '((a . b) (c . d))))

@@ -599,8 +599,12 @@ print_scm_val(scheme());
 return 0;
 }"))
 
+(define (add-bindings x)
+  (list 'let '((car (lambda (x) (car x))))
+        x))
+
 (define (compile x)
-  (emit-program (compile-expr (closure-convert (convert-mutable-vars (desugar x))) (empty-env))))
+  (emit-program (compile-expr (closure-convert (convert-mutable-vars (desugar (add-bindings x)))) (empty-env))))
 
 (define (main args)
   (if (not (= (length args) 1))

@@ -73,8 +73,8 @@
    ((null? x) (compile-null))
    ((pair? x)
     (list "cons" (list (compile-quoted (car x))
-		       ","
-		       (compile-quoted-pair (cdr x)))))
+                       ","
+                       (compile-quoted-pair (cdr x)))))
    (else (compile-quoted x))))
 
 ;; define primitive procedures
@@ -98,10 +98,10 @@
 
 ;; have to subtract 0b1000 because fxtag is already set
 (make-unary-primitive 'fixnum->char (lambda (x env)
-				      (binop (cc (binop x '<< (cc (- cshift fxshift)) env))
-					     '+
-					     (cc (- ctag (lsh fxtag 3)))
-					     env)))
+                                      (binop (cc (binop x '<< (cc (- cshift fxshift)) env))
+                                             '+
+                                             (cc (- ctag (lsh fxtag 3)))
+                                             env)))
 
 (define (to-bool x) (list (list x '<< bshift) '+ btag))
 
@@ -110,9 +110,9 @@
 (make-unary-primitive 'fxzero? (lambda (x env) (to-bool (binop x '== 0 env))))
 
 (define (tagged? mask tag) (lambda (x env) (to-bool (binop (cc (binop x '& (cc mask) env))
-							   '==
-							   (cc tag)
-							   env))))
+                                                           '==
+                                                           (cc tag)
+                                                           env))))
 
 (make-unary-primitive 'fixnum? (tagged? fxmask fxtag))
 (make-unary-primitive 'boolean? (tagged? bmask btag))
@@ -130,9 +130,9 @@
 (define (to-fixnum x env) (binop (cc (binop x '<< (cc fxshift) env)) '+ (cc fxtag) env))
 
 (make-binary-primitive 'fx* (lambda (x y env) (to-fixnum (cc (binop (cc (from-fixnum x))
-								    '*
-								    (cc (from-fixnum y))
-								    env)))))
+                                                                    '*
+                                                                    (cc (from-fixnum y))
+                                                                    env)))))
 
 (make-binary-primitive 'fxlogand (pure-binop '&))
 (make-binary-primitive 'fxlogor (pure-binop "|"))
@@ -150,10 +150,10 @@
 (make-binary-primitive 'char<= (compose to-bool (pure-binop '<=)))
 
 (make-unary-primitive 'string-length
-		      (lambda (x env)
-			(to-fixnum
-			 (cc (list (list "(block*)" (compile-expr x env)) "->header >> headershift"))
-			 env)))
+                      (lambda (x env)
+                        (to-fixnum
+                         (cc (list (list "(block*)" (compile-expr x env)) "->header >> headershift"))
+                         env)))
 
 (make-binary-primitive 'eq? (compose to-bool (pure-binop '==)))
 (make-binary-primitive 'eqv? (compose to-bool (pure-binop '==)))
@@ -167,21 +167,21 @@
 (make-primitive 'cons (func "cons"))
 
 (make-unary-primitive 'make-vector (lambda (x env)
-				     (list "allocvector(" x ")")))
+                                     (list "allocvector(" x ")")))
 
 (make-binary-primitive 'vector-ref (lambda (v i env)
-				     (list "((block*)" (compile-expr v env) ")->data[" i "]")))
+                                     (list "((block*)" (compile-expr v env) ")->data[" i "]")))
 
 ;; TODO: deal with n-ary arguments
 ;; TODO: should not be a primitive
 (make-unary-primitive 'vector (lambda (x env)
-				(let ((tmp (new-tmp)))
-				  (intercalate
-				   ","
-				   (list
-				    (list tmp "=" (compile-expr (list 'make-vector 1) env))
-				    (compile-expr (list 'set! (list 'vector-ref (cc tmp) 0) x) env)
-				    tmp)))))
+                                (let ((tmp (new-tmp)))
+                                  (intercalate
+                                   ","
+                                   (list
+                                    (list tmp "=" (compile-expr (list 'make-vector 1) env))
+                                    (compile-expr (list 'set! (list 'vector-ref (cc tmp) 0) x) env)
+                                    tmp)))))
 
 ;; compile primitive procedures
 
@@ -207,8 +207,8 @@
 
 (define (compile-if x env)
   (list (from-bool (cadr x) env)
-	'? (compile-expr (caddr x) env)
-	': (compile-expr (cadddr x) env)))
+        '? (compile-expr (caddr x) env)
+        ': (compile-expr (cadddr x) env)))
 
 ;; C constant
 (define (cc x)
@@ -224,8 +224,8 @@
 (define (lookup var env)
   (let ((id (assq-ref var env)))
     (if id
-	id
-	(error var "is unbound"))))
+        id
+        (error var "is unbound"))))
 
 (define extend append)
 
@@ -251,14 +251,14 @@
 
 (define (compile-lambda x env)
   (let ((formals (cadr x))
-	(body (cddr x)))
+        (body (cddr x)))
     (let ((lambda-name (uniq-var "l"))
-	  (formal-pairs (map (lambda (f) (cons f (uniq-var "v"))) formals)))
+          (formal-pairs (map (lambda (f) (cons f (uniq-var "v"))) formals)))
       (let ((new-env (extend env formal-pairs)))
-	(set! *lambdas* (cons
-			 (list lambda-name (map cdr formal-pairs) (compile-begin-expr body new-env))
-			 *lambdas*))
-	lambda-name))))
+        (set! *lambdas* (cons
+                         (list lambda-name (map cdr formal-pairs) (compile-begin-expr body new-env))
+                         *lambdas*))
+        lambda-name))))
 
 (define closure? (tagged-pair? 'closure))
 
@@ -271,23 +271,23 @@
 
 (define (compile-closure x env)
   (let ((l (cadr x))
-	(fvs (caddr x)))
+        (fvs (caddr x)))
     (let ((lambda-name (compile-lambda l env)))
       (let ((alloc-expr (string-append "allocclosure(&" lambda-name "," (number->string (length fvs)) ")"))
-	    (tmp (new-tmp)))
-	(if (= 0 (length fvs))
-	    alloc-expr
-	    (intercalate
-	     ","
-	     (append (list (list tmp "=" alloc-expr))
-		     (append (enumerate (lambda (i fv) (binop (list 'env-get (cc tmp) i) '= fv env)) fvs)
-			     (list tmp)))))))))
+            (tmp (new-tmp)))
+        (if (= 0 (length fvs))
+            alloc-expr
+            (intercalate
+             ","
+             (append (list (list tmp "=" alloc-expr))
+                     (append (enumerate (lambda (i fv) (binop (list 'env-get (cc tmp) i) '= fv env)) fvs)
+                             (list tmp)))))))))
 
 (define env-get? (tagged-pair? 'env-get))
 
 (define (compile-env-get x env)
   (let ((env-var (cadr x))
-	(env-i (caddr x)))
+        (env-i (caddr x)))
     (list (list "(block*)" (compile-expr env-var env)) "->data[" (+ env-i 1) "]")))
 
 ;; begin
@@ -307,11 +307,11 @@
 (define (compile-app x env)
   (let ((tmp (new-tmp)))
     (let ((proc (compile-expr (car x) env))
-	  (args (cons tmp (map (lambda (arg) (compile-expr arg env)) (cdr x)))))
+          (args (cons tmp (map (lambda (arg) (compile-expr arg env)) (cdr x)))))
       (intercalate "," (list (list tmp "=" proc)
-			     (list (list (list "scm(*)" (intercalate "," (map (const "scm") args)))
-					 (list (list "(block*)" (list tmp)) "->data[0]"))
-				   (intercalate "," args)))))))
+                             (list (list (list "scm(*)" (intercalate "," (map (const "scm") args)))
+                                         (list (list "(block*)" (list tmp)) "->data[0]"))
+                                   (intercalate "," args)))))))
 
 ;; quote
 
@@ -377,7 +377,7 @@
    ((if? x) (reduce set-union (map free-vars (cdr x)) '()))
    ((begin? x) (reduce set-union (map free-vars (cdr x)) '()))
    ((lambda? x) (set-difference (reduce set-union (map free-vars (cddr x)) '())
-				(list->set (cadr x))))
+                                (list->set (cadr x))))
 
    ;; closures
    ((closure? x) (set-union (free-vars (cadr x)) (free-vars (caddr x))))
@@ -399,7 +399,7 @@
 
    ;; variables
    ((var? x) (let ((sub (assq-ref x dict)))
-	       (if sub sub x)))
+               (if sub sub x)))
 
    ;; special forms
    ((quote? x) x)
@@ -435,13 +435,13 @@
    ((begin? x) (cons 'begin (map closure-convert (cdr x))))
    ((lambda? x)
     (let ((formals (cadr x))
-	  (body (map closure-convert (cddr x))))
+          (body (map closure-convert (cddr x))))
       (let ((fvs (set-difference (free-vars body) (free-vars formals))))
-	(let ((closure-env (string->symbol (uniq-var "e"))))
-	  (let ((dict (enumerate (lambda (i fv) (cons fv (list 'env-get closure-env i))) fvs)))
-	    (list 'closure
-		  (append (list 'lambda (cons closure-env formals)) (map (lambda (e) (sub-vars e dict)) body))
-		  fvs))))))
+        (let ((closure-env (string->symbol (uniq-var "e"))))
+          (let ((dict (enumerate (lambda (i fv) (cons fv (list 'env-get closure-env i))) fvs)))
+            (list 'closure
+                  (append (list 'lambda (cons closure-env formals)) (map (lambda (e) (sub-vars e dict)) body))
+                  fvs))))))
 
    ;; primitive calls
    ((primcall? x) (cons (car x) (map closure-convert (cdr x))))
@@ -467,7 +467,7 @@
    ((if? x) (reduce set-union (map mutated-vars (cdr x)) '()))
    ((begin? x) (reduce set-union (map mutated-vars (cdr x)) '()))
    ((lambda? x) (set-difference (reduce set-union (map mutated-vars (cddr x)) '())
-				(list->set (cadr x))))
+                                (list->set (cadr x))))
 
    ;; primitive calls
    ((primcall? x) (reduce set-union (map mutated-vars (cdr x)) '()))
@@ -492,13 +492,13 @@
    ((begin? x) (cons 'begin (map convert-mutable-vars (cdr x))))
    ((lambda? x)
     (let ((formals (cadr x))
-	  (body (map convert-mutable-vars (cddr x))))
+          (body (map convert-mutable-vars (cddr x))))
       (let ((mvs (set-intersection (mutated-vars body) formals)))
-	(cons 'lambda
-	      (cons formals
-		    (append
-		     (map (lambda (mv) (list 'set! mv (list 'vector mv))) mvs)
-		     (sub-vars body (map (lambda (mv) (cons mv (list 'vector-ref mv 0))) mvs))))))))
+        (cons 'lambda
+              (cons formals
+                    (append
+                     (map (lambda (mv) (list 'set! mv (list 'vector mv))) mvs)
+                     (sub-vars body (map (lambda (mv) (cons mv (list 'vector-ref mv 0))) mvs))))))))
 
    ;; primitive calls
    ((primcall? x) (cons (car x) (map convert-mutable-vars (cdr x))))
@@ -514,8 +514,8 @@
 
 (define (let->lambda x)
   (let ((vars (map car (cadr x)))
-	(vals (map cadr (cadr x)))
-	(body (map desugar (cddr x))))
+        (vals (map cadr (cadr x)))
+        (body (map desugar (cddr x))))
     (append (list (append (list 'lambda vars) body)) vals)))
 
 (define (desugar x)
@@ -559,11 +559,11 @@
 (define (emit-args args)
   (if (not (null? args))
       (begin
-	(emit "scm ") (emit (car args))
-	(if (not (null? (cdr args)))
-	    (for-each (lambda (arg)
-			(emit ", scm ") (emit arg))
-		      (cdr args))))))
+        (emit "scm ") (emit (car args))
+        (if (not (null? (cdr args)))
+            (for-each (lambda (arg)
+                        (emit ", scm ") (emit arg))
+                      (cdr args))))))
 
 (define (emit-function-declaration name args)
   (emit "scm ")

@@ -494,7 +494,7 @@
    ((lambda? x)
     (let ((formals (cadr x))
           (body (map convert-mutable-vars (cddr x))))
-      (let ((mvs (set-intersection (mutated-vars body) formals)))
+      (let ((mvs (set-intersection (mutated-vars body) (list->set formals))))
         (cons 'lambda
               (cons formals
                     (append

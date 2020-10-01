@@ -1,0 +1,8 @@
+(letrec ((times100 (lambda (x)
+                     (fx* x 100)))
+         (mymap (lambda (f lst)
+                  (if (null? lst)
+                      '()
+                      (cons (f (car lst))
+                            (mymap f (cdr lst)))))))
+  (mymap times100 '(-3 -2 -1 0 1 2 3)))

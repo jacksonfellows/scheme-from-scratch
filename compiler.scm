@@ -623,9 +623,27 @@ return 0;
 (define (compile x)
   (emit-program (compile-expr (closure-convert (convert-mutable-vars (desugar (add-bindings x)))) (empty-env))))
 
+(define *defines* '())
+
+(define (add-define x)
+  (set! *defines* (cons (list (caadr x) (list 'lambda (cdadr x) (caddr x))) *defines*)))
+
+(define (with-defines x)
+  (list 'letrec *defines* x))
+
+(define define? (tagged-pair? 'define))
+
+(define (read-prog o)
+  (let ((x (read o)))
+    (if (not (eq? x (eof-object)))
+        (if (define? x)
+            (begin (add-define x) (read-prog o))
+            ;; kind of stupid
+            (compile (if (< 0 (length *defines*)) (with-defines x) x))))))
+
 (define (main args)
   (if (not (= (length args) 1))
       (error "wrong # of command line arguments"))
   (let ((o (open-input-file (car args))))
-    (compile (read o))
+    (read-prog o)
     (close-port o)))

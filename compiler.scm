@@ -129,10 +129,11 @@
 (define (from-fixnum x env) (binop x '>> (cc fxshift) env))
 (define (to-fixnum x env) (binop (cc (binop x '<< (cc fxshift) env)) '+ (cc fxtag) env))
 
-(make-binary-primitive 'fx* (lambda (x y env) (to-fixnum (cc (binop (cc (from-fixnum x))
-                                                                    '*
-                                                                    (cc (from-fixnum y))
-                                                                    env)))))
+(make-binary-primitive 'fx* (lambda (x y env)
+                              (to-fixnum (cc (binop (cc (from-fixnum x env))
+                                                    '*
+                                                    (cc (from-fixnum y env))
+                                                    env)))))
 
 (make-binary-primitive 'fxlogand (pure-binop '&))
 (make-binary-primitive 'fxlogor (pure-binop "|"))

@@ -168,10 +168,10 @@
 (make-primitive 'cons (func "cons"))
 
 (make-unary-primitive 'make-vector (lambda (x env)
-                                     (list "allocvector(" (compile-expr x env) ")")))
+                                     (list "allocvector(" (from-fixnum x env) ")")))
 
 (make-binary-primitive 'vector-ref (lambda (v i env)
-                                     (list "((block*)" (compile-expr v env) ")->data[" (compile-expr i env) "]")))
+                                     (list "((block*)" (compile-expr v env) ")->data[" (from-fixnum i env) "]")))
 
 (make-primitive 'vector (lambda (args env)
                                 (let ((tmp (new-tmp)))

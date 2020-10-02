@@ -168,7 +168,7 @@
 (make-primitive 'cons (func "cons"))
 
 (make-unary-primitive 'make-vector (lambda (x env)
-                                     (list "allocvector(" x ")")))
+                                     (list "allocvector(" (compile-expr x env) ")")))
 
 (make-binary-primitive 'vector-ref (lambda (v i env)
                                      (list "((block*)" (compile-expr v env) ")->data[" i "]")))

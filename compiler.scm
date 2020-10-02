@@ -82,13 +82,13 @@
 
 (define *primitives* '())
 
-(define (make-primitive name expander)
-  (set! *primitives* (cons (cons name expander) *primitives*)))
+(define (make-primitive name expander n)
+  (set! *primitives* (cons (cons name (cons expander n)) *primitives*)))
 
 (define (binop r op l env) (list (compile-expr r env) op (compile-expr l env)))
 
 (define (make-unary-primitive name expander)
-  (make-primitive name (lambda (args env) (expander (car args) env))))
+  (make-primitive name (lambda (args env) (expander (car args) env)) 1))
 
 (make-unary-primitive 'fxadd1 (lambda (x env) (binop x '+ (cc (lsh 1 fxshift)) env)))
 (make-unary-primitive 'fxsub1 (lambda (x env) (binop x '- (cc (lsh 1 fxshift)) env)))
@@ -119,7 +119,7 @@
 (make-unary-primitive 'char? (tagged? cmask ctag))
 
 (define (make-binary-primitive name expander)
-  (make-primitive name (lambda (args env) (expander (car args) (cadr args) env))))
+  (make-primitive name (lambda (args env) (expander (car args) (cadr args) env)) 2))
 
 (define (pure-binop op) (lambda (x y env) (binop x op y env)))
 
@@ -162,10 +162,10 @@
 (define (func f)
   (lambda (args env) (list f (intercalate "," (map (lambda (arg) (compile-expr arg env)) args)))))
 
-(make-primitive 'car (func "CAR"))
-(make-primitive 'cdr (func "CDR"))
+(make-primitive 'car (func "CAR") 1)
+(make-primitive 'cdr (func "CDR") 1)
 
-(make-primitive 'cons (func "cons"))
+(make-primitive 'cons (func "cons") 2)
 
 (make-unary-primitive 'make-vector (lambda (x env)
                                      (list "allocvector(" (from-fixnum x env) ")")))
@@ -181,7 +181,7 @@
                                     (list tmp "=" (compile-expr (list 'make-vector (length args)) env))
                                     (append
                                      (enumerate (lambda (i arg) (compile-expr (list 'set! (list 'vector-ref (cc tmp) i) arg) env)) args)
-                                     (list tmp)))))))
+                                     (list tmp)))))) '*)
 
 (make-unary-primitive 'vector-length (lambda (v env)
                                        (to-fixnum
@@ -197,7 +197,7 @@
   (and (pair? x) (primitive? (car x))))
 
 (define (compile-primcall x env)
-  ((assq-ref (car x) *primitives*) (cdr x) env))
+  ((car (assq-ref (car x) *primitives*)) (cdr x) env))
 
 ;; compile if
 
@@ -620,8 +620,22 @@ print_scm_val(scheme());
 return 0;
 }"))
 
+(define *bound-defs* '())
+
+(define (arg-list n)
+  (dotimes (lambda (i) (string->symbol (string-append "a" (number->string i)))) n))
+
+(define (bind-primitive primitive)
+  (let ((n (cdr (assq-ref primitive *primitives*))))
+    (if (number? n)
+        (set! *bound-defs* (cons (cons primitive (arg-list n)) *bound-defs*)))))
+
+;;; TODO: only bind the needed primitives
+
+(for-each bind-primitive (map car *primitives*))
+
 (define (add-bindings x)
-  (list 'let '((car (lambda (x) (car x))))
+  (list 'let (map (lambda (def) (list (car def) (list 'lambda (cdr def) def))) *bound-defs*)
         x))
 
 (define (compile x)

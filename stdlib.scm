@@ -115,6 +115,13 @@
 	(cons (f i (car lst)) (go (+ 1 i) (cdr lst)))))
   (go 0 lst))
 
+(define (dotimes f n)
+  (define (go i n)
+    (if (= n 0)
+        '()
+        (cons (f i) (go (+ i 1) (- n 1)))))
+  (go 0 n))
+
 ;; sets are sorted lists
 (define (set? x) (and (list? x) (apply < x)))
 

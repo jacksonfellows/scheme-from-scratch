@@ -48,6 +48,8 @@ typedef struct {
 
 #define IS_PAIR(x) (TAGGED(x,immask,0) && TAGGED((((block*)x))->header,headermask,pairtag))
 
+#define VECTOR_LENGTH(x) (((block*)x)->header >> headershift)
+
 scm allocvector(size_t len);
 scm allocsymbol(char *name, size_t len);
 scm allocstring(char *str, size_t len);

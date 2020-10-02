@@ -183,6 +183,11 @@
                                      (enumerate (lambda (i arg) (compile-expr (list 'set! (list 'vector-ref (cc tmp) i) arg) env)) args)
                                      (list tmp)))))))
 
+(make-unary-primitive 'vector-length (lambda (v env)
+                                       (to-fixnum
+                                        (cc (list 'VECTOR_LENGTH (list (compile-expr v env))))
+                                        env)))
+
 ;; compile primitive procedures
 
 (define (primitive? x)

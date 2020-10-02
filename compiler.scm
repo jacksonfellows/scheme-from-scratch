@@ -171,7 +171,7 @@
                                      (list "allocvector(" (compile-expr x env) ")")))
 
 (make-binary-primitive 'vector-ref (lambda (v i env)
-                                     (list "((block*)" (compile-expr v env) ")->data[" i "]")))
+                                     (list "((block*)" (compile-expr v env) ")->data[" (compile-expr i env) "]")))
 
 (make-primitive 'vector (lambda (args env)
                                 (let ((tmp (new-tmp)))

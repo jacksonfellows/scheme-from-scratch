@@ -173,16 +173,15 @@
 (make-binary-primitive 'vector-ref (lambda (v i env)
                                      (list "((block*)" (compile-expr v env) ")->data[" i "]")))
 
-;; TODO: deal with n-ary arguments
-;; TODO: should not be a primitive
-(make-unary-primitive 'vector (lambda (x env)
+(make-primitive 'vector (lambda (args env)
                                 (let ((tmp (new-tmp)))
                                   (intercalate
                                    ","
-                                   (list
-                                    (list tmp "=" (compile-expr (list 'make-vector 1) env))
-                                    (compile-expr (list 'set! (list 'vector-ref (cc tmp) 0) x) env)
-                                    tmp)))))
+                                   (cons
+                                    (list tmp "=" (compile-expr (list 'make-vector (length args)) env))
+                                    (append
+                                     (enumerate (lambda (i arg) (compile-expr (list 'set! (list 'vector-ref (cc tmp) i) arg) env)) args)
+                                     (list tmp)))))))
 
 ;; compile primitive procedures
 

@@ -188,6 +188,9 @@
                                         (cc (list 'VECTOR_LENGTH (list (compile-expr v env))))
                                         env)))
 
+(make-unary-primitive 'pair? (lambda (x env)
+                               (to-bool (list 'IS_PAIR (list (compile-expr x env))))))
+
 ;; compile primitive procedures
 
 (define (primitive? x)

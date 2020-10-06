@@ -546,7 +546,7 @@
 (define (cond->if x)
   (define (convert-cases cases)
     (if (not (null? cases))
-        (list 'if (caar cases) (cadar cases) (convert-cases (cdr cases)))))
+        (list 'if (if (eq? (caar cases) 'else) #t (caar cases)) (cadar cases) (convert-cases (cdr cases)))))
   (convert-cases (cdr x)))
 
 (define (desugar x)

@@ -538,6 +538,14 @@
             (append (map2 (lambda (var val) (list 'set! var val)) vars vals)
                     body))))
 
+(define cond? (tagged-pair? 'cond))
+
+(define (cond->if x)
+  (define (convert-cases cases)
+    (if (not (null? cases))
+        (list 'if (caar cases) (cadar cases) (convert-cases (cdr cases)))))
+  (convert-cases (cdr x)))
+
 (define (desugar x)
   (cond
    ;; constants
@@ -556,6 +564,7 @@
    ;; sugar
    ((let? x) (desugar (let->lambda x)))
    ((letrec? x) (desugar (letrec->letset! x)))
+   ((cond? x) (desugar (cond->if x)))
 
    ;; primitive calls
    ((primcall? x) (cons (car x) (map desugar (cdr x))))
